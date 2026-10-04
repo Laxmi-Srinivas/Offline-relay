@@ -52,8 +52,9 @@ host toolchains. Run `dart analyze packages/relay_transport` from the repo root.
 
 For the BLE experiment, see its [runbook](experiments/ble_poc/README.md).
 Contributor device evidence is in the [validation record](docs/testing/validation.md).
-Security's automated tests and native source compilation have passed; its full APK
-build failed during NDK setup. Background/negative-case physical checks and link
+Security's shared Flutter tests and Android native source compilation have passed;
+its debug APK build passed after resolving initial SDK/disk-space failures.
+iOS native fixes await Mac verification. Background/negative-case physical checks and link
 encryption/authentication remain pending. See the security verification record
 for exact outcomes and limitations; prior device records were not rerun here.
 
