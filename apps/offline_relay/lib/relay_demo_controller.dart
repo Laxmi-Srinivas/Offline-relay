@@ -47,6 +47,7 @@ class RelayDemoController extends ChangeNotifier {
   String? _outgoingRequestId;
   int _sessionEpoch = 0;
   bool _disposed = false;
+  Timer? _incomingSetupTimer;
   StreamSubscription<RelayConnection>? _incomingSubscription;
   StreamSubscription<RelayPeer>? _discoverySubscription;
   StreamSubscription<Uint8List>? _messageSubscription;
@@ -261,6 +262,11 @@ class RelayDemoController extends ChangeNotifier {
     messages.clear();
     incomingPeerName = connection.peer.label;
     _listenForMessages(connection);
+    _incomingSetupTimer = Timer(const Duration(seconds: 15), () {
+      if (!_isCurrent(connection) || incomingRequestId != null) return;
+      _endConnection(connection, 'Connection request timed out.');
+      unawaited(connection.close());
+    });
     status = 'A nearby user wants to connect.';
     notifyListeners();
   }
@@ -301,6 +307,8 @@ class RelayDemoController extends ChangeNotifier {
           return;
         }
         incomingRequestId = envelope.id;
+        _incomingSetupTimer?.cancel();
+        _incomingSetupTimer = null;
         incomingPeerName =
             _bodyString(envelope, 'name') ?? connection.peer.label;
         status = 'Connection request from $incomingPeerName.';
@@ -355,6 +363,8 @@ class RelayDemoController extends ChangeNotifier {
       envelope.body['requestId'] == _outgoingRequestId;
 
   void _clearSession() {
+    _incomingSetupTimer?.cancel();
+    _incomingSetupTimer = null;
     ++_sessionEpoch;
     _connection = null;
     _incomingConnection = null;

@@ -53,6 +53,62 @@ void main() {
     expect(controller.messages, isEmpty);
   });
 
+  testWidgets('subscribed peer without a request expires and frees the slot', (
+    tester,
+  ) async {
+    controller.dispose();
+    transport = TestTransport();
+    controller = RelayDemoController(transport);
+    controller.updateProfile(
+      name: 'Helper',
+      role: RelayUserRole.internetHelper,
+    );
+    await controller.offerHelp();
+    final idle = TestConnection('idle');
+    transport.incoming.add(idle);
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 14));
+    expect(idle.closed, isFalse);
+    await tester.pump(const Duration(seconds: 1));
+    expect(idle.closed, isTrue);
+    expect(controller.hasIncomingRequest, isFalse);
+    await controller.offerHelp();
+    final next = TestConnection('next');
+    transport.incoming.add(next);
+    await tester.pump();
+    next.emit(RelayMessageType.connectionRequest, {
+      'name': 'Next',
+      'role': 'offline_user',
+    });
+    await tester.pump();
+    expect(controller.hasIncomingRequest, isTrue);
+    expect(next.closed, isFalse);
+  });
+
+  testWidgets('valid request cancels setup timer while user decides', (
+    tester,
+  ) async {
+    controller.dispose();
+    transport = TestTransport();
+    controller = RelayDemoController(transport);
+    controller.updateProfile(
+      name: 'Helper',
+      role: RelayUserRole.internetHelper,
+    );
+    await controller.offerHelp();
+    final peer = TestConnection('request');
+    transport.incoming.add(peer);
+    await tester.pump();
+    peer.emit(RelayMessageType.connectionRequest, {
+      'name': 'User',
+      'role': 'offline_user',
+    });
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 30));
+    expect(peer.closed, isFalse);
+    expect(controller.hasIncomingRequest, isTrue);
+  });
+
   test('chat is ignored until helper approval', () async {
     final connection = await incoming();
     connection.emit(RelayMessageType.chat, {'text': 'unsolicited'});

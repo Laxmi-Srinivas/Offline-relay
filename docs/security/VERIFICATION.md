@@ -5,7 +5,14 @@
 Consent/session changes: Flutter analysis passed, all 19 tests passed (9 existing
 and 10 new regressions). The 10 new tests first failed on the unchanged controller,
 then passed after the fix. See COMMANDS.md for actual commands and tool setup.
-Native, memory-policy and device checks below remain pending at this checkpoint.
+After independent deadlines/request setup changes, all 21 Flutter tests and analysis
+passed. The 6 native deadline-helper tests passed using cached Kotlin 2.1.20 and
+Java 25; full app build and physical checks remain separate verification.
+
+Full debug APK build failed during SDK setup: NDK 28.2.13676358 could not be
+installed by the local SDK tooling. Native BLE session source compilation passed
+separately against Android API 35 and the matching Flutter embedding, using
+Kotlin 2.1.20. This does not establish the full Gradle build or device behavior.
 
 Using matching Flutter 3.47.6 / Dart 3.13.5, from `apps/offline_relay`:
 
@@ -21,6 +28,16 @@ async completions, and correct normal approval/send/receive behavior.
 Native deadline tests must use controlled time and exercise the production timer
 helper, including send/receive overlap, receive completion and stale timer callbacks.
 Compiler/helper checks do not substitute for a full APK build or device tests.
+
+On Windows with the cached jars listed in the script:
+
+```powershell
+./apps/offline_relay/test/native/run_deadline_tests.ps1
+```
+
+The script only reads compiler jars and writes compiled tests to TEMP. Override
+`-KotlinCache` and `-OutputDirectory` if needed. It does not download dependencies.
+It tests real production deadline cancellation, not the Bluetooth stack.
 
 ## Physical-device checks (not run)
 

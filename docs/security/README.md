@@ -40,8 +40,8 @@ Native path: `apps/offline_relay/android/app/src/main/kotlin/dev/offlinerelay/of
 | ID | Finding and evidence at base | Prerequisite, impact, existing protection | Severity / confidence | Status |
 | --- | --- | --- | --- | --- |
 | S1 | Accept/reject lacks state/connection guard; missing requestId matches null; chat unconditionally appended. Controller 220-229, 254-297. | Connected unapproved peer changes UI to chat or inserts messages. Normal approval UI and outer JSON validation exist. Does not prove disclosure. | Medium / high source confidence | Fixed: current-connection/pending-request checks and accepted-chat gate; automated regressions passed; device check pending |
-| S2 | Shared timer replaced/cleared by receive. Native 96-105, 190-212, 446-471, 573-605. | Connected peer sends inbound traffic while withholding send ACK; outstanding send may never time out. Existing cap and nominal 15-second deadline do not isolate operations. | Medium / high source confidence | Fix and native verification pending |
-| S3 | Idle peer occupies one slot; no request setup expiry. Native 399-440; controller 220-231. | Nearby peer connects without subscribing or requesting. Blocks other peers. Foreground teardown and one-peer restriction exist. | Medium / high source confidence | Fix and device verification pending |
+| S2 | Shared timer replaced/cleared by receive. Native 96-105, 190-212, 446-471, 573-605. | Connected peer sends inbound traffic while withholding send ACK; outstanding send may never time out. Existing cap and nominal 15-second deadline do not isolate operations. | Medium / high source confidence | Fixed with independent setup/send/receive deadlines; 6 production-helper tests pass; device verification pending |
+| S3 | Idle peer occupies one slot; no request setup expiry. Native 399-440; controller 220-231. | Nearby peer connects without subscribing or requesting. Blocks other peers. Foreground teardown and one-peer restriction exist. | Medium / high source confidence | Subscription and request setup each expire after 15 seconds; controller/helper tests and native source compilation pass; full APK/device verification pending. Valid requests keep existing human accept/reject behavior. |
 | S4 | Disconnect retains controller history/references. Controller 107-116, 197-218, 234-251. | Peer disconnect/error followed by another chat; old history can appear under new peer or reconnect is blocked. Explicit back action and native cleanup exist. History is not transmitted automatically. | Medium / high source confidence | Fixed: common cleanup and stale async completion guards; automated disconnect/reconnect regressions passed; device check pending |
 | S5 | Unbounded history; repeated envelope IDs appended. Controller 30-31, 179-195, 287-297. | Connected peer repeats valid messages; duplicate display and increasing memory. 256-byte per-message cap exists. Practical exhaustion rate unknown. | Low-Medium / high for growth, medium for exhaustion | History policy requires agreement; device stress testing pending |
 | S6 | No required encrypted/authenticated link or application key exchange. Native 121-138, 176-187, 190-212, 551-570; envelope encode in packages/relay_transport/lib/relay_transport.dart 126-142. | Radio attacker would need an unprotected link and suitable capability; interception not demonstrated. User selection and IDs/ACK checks are not cryptographic authentication. | Medium / high for missing policy, actual link state unknown | Device security inspection and pairing UX agreement required; no crypto implemented |
@@ -51,6 +51,11 @@ native iOS remediation remains deferred. Android and iOS branches diverge in
 their native adapters; no interoperability or merge is implied.
 
 ## Verification and honest claims
+
+Deadline helper `BleDeadlines` uses independent cancellation tokens for SETUP,
+SEND and RECEIVE. Stale callbacks cannot expire replacement timers. Native stop
+clears all deadlines. Incoming application setup expires only until the first
+valid request; the helper is not forced to decide within a new time limit.
 
 See [command record](COMMANDS.md) for executed commands and results and
 [verification](VERIFICATION.md) for automated and physical checks.

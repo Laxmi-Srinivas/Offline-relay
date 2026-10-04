@@ -32,3 +32,28 @@ Further results will be appended after execution, not predicted.
   files were restored to the Security HEAD version; no desktop functionality was changed.
 - These tests use local fake transports; no radios, unrelated devices or services
   were probed. Device acceptance/reconnect verification remains pending.
+
+### Independent deadlines and idle setup
+
+- Added production `BleDeadlines` helper and used it in Android session: separate
+  setup/send/receive cancellation, plus a notification-subscription deadline.
+- Added controller request-setup timer and two tests using Flutter controlled time.
+  First attempt constructed subscriptions outside the fake-time zone, causing one
+  test failure; test setup was corrected. Both timer tests then passed.
+- `flutter analyze` passed; the complete Flutter suite passed all 21 tests.
+- `apps/offline_relay/test/native/run_deadline_tests.ps1` compiled the production
+  helper and tests with cached Kotlin 2.1.20 and Java 25; all 6 tests passed. Java
+  printed an Unsafe deprecation warning from the compiler, not an app test failure.
+- Started `flutter build apk --debug` with process-local ANDROID_SDK_ROOT pointing
+  to the existing Android SDK. It downloaded official Flutter Android artifacts and
+  Gradle dependencies. FAILED before app compilation because SDK Manager could not
+  install NDK 28.2.13676358. No APK result is claimed. Tooling emitted Android CLI
+  usage-metrics information during its automatic setup; no source scan was requested.
+- Downloaded the matching debug Flutter embedding JAR from the official Flutter
+  Maven host to TEMP (engine b8c8d3d8d5d0095127057f8a29ca8cc53da2167c).
+- Ran `run_deadline_tests.ps1 -AndroidJar <installed android-35/android.jar>
+  -FlutterEmbeddingJar <TEMP/flutter_embedding_debug.jar>`: 6 tests passed again,
+  and the actual `BleRelaySession.kt` plus helper compiled successfully against
+  Android API 35 and the matching embedding. This uses Kotlin 2.1.20, not the full
+  declared Gradle/AGP pipeline; it establishes source compilation only.
+- The first verified commit is `3ec8369` (consent and conversation lifecycle).

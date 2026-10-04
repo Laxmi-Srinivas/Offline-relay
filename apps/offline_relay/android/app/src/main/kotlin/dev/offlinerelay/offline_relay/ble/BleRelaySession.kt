@@ -73,7 +73,15 @@ class BleRelaySession(
     private var receiveIndex = 0
     private val received = ByteArrayOutputStream()
     private var acknowledgement = byteArrayOf()
-    private var timeout: Runnable? = null
+    private val deadlines = BleDeadlines(
+        schedule = { delay, action ->
+            val callback = Runnable { action() }
+            handler.postDelayed(callback, delay)
+            val cancel: () -> Unit = { handler.removeCallbacks(callback) }
+            cancel
+        },
+        expired = { stage -> if (active) fail("timeout: $stage") },
+    )
 
     private fun log(name: String, fields: Map<String, Any?> = emptyMap()) {
         val line = buildString {
@@ -93,16 +101,12 @@ class BleRelaySession(
         }
     }
 
-    private fun deadline(stage: String) {
-        clearDeadline()
-        timeout = Runnable { fail("timeout: $stage") }.also {
-            handler.postDelayed(it, 15_000)
-        }
+    private fun deadline(stage: String, operation: BleDeadlines.Operation = BleDeadlines.Operation.SETUP) {
+        deadlines.arm(operation, stage)
     }
 
-    private fun clearDeadline() {
-        timeout?.let(handler::removeCallbacks)
-        timeout = null
+    private fun clearDeadline(operation: BleDeadlines.Operation = BleDeadlines.Operation.SETUP) {
+        deadlines.clear(operation)
     }
 
     fun advertise(profile: Map<String, Any?>, result: MethodChannel.Result) {
@@ -208,7 +212,7 @@ class BleRelaySession(
             (outboundLength shr 8).toByte(),
             outboundLength.toByte(),
         )
-        deadline("message write / application ACK")
+        deadline("message write / application ACK", BleDeadlines.Operation.SEND)
         if (outboundIsPeripheral) sendNextNotification() else writeNext()
     }
 
@@ -414,6 +418,7 @@ class BleRelaySession(
                     notificationEnabled = false
                     incomingAnnounced = false
                     log("connection_established", mapOf("role" to "peripheral"))
+                    deadline("notification subscription")
                 }
             } else if (device == remote) {
                 stop("disconnect status=$status state=$newState", notify = true)
@@ -433,6 +438,7 @@ class BleRelaySession(
             if (valid) {
                 notificationEnabled = value.contentEquals(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
                 if (notificationEnabled && !incomingAnnounced && connectionId != null) {
+                    clearDeadline()
                     incomingAnnounced = true
                     ready = true
                     emit(mapOf("event" to "incomingConnection", "connectionId" to connectionId,
@@ -454,7 +460,7 @@ class BleRelaySession(
         ) {
             val copy = value.clone()
             event {
-                val validBase = device == remote && !preparedWrite && offset == 0 && responseNeeded
+                val validBase = device == remote && ready && !preparedWrite && offset == 0 && responseNeeded
                 var status = BluetoothGatt.GATT_SUCCESS
                 try {
                     require(validBase) { "Invalid GATT write" }
@@ -468,7 +474,7 @@ class BleRelaySession(
                     log("receive_error", mapOf("message" to error.message))
                     resetReceive()
                     acknowledgement = byteArrayOf()
-                    clearDeadline()
+                    clearDeadline(BleDeadlines.Operation.RECEIVE)
                 }
                 check(server?.sendResponse(device, requestId, status, offset, null) == true) {
                     "GATT write response rejected"
@@ -552,7 +558,7 @@ class BleRelaySession(
         check(outbound.isNotEmpty() && !outboundIsPeripheral && value.contentEquals(expectedAck)) {
             "Application ACK mismatch"
         }
-        clearDeadline()
+        clearDeadline(BleDeadlines.Operation.SEND)
         pendingSend?.success(null)
         pendingSend = null
         log("acknowledgement_received", mapOf("id" to outboundId, "bytes" to outboundLength))
@@ -563,7 +569,7 @@ class BleRelaySession(
         check(outbound.isNotEmpty() && outboundIsPeripheral && value.contentEquals(expectedAck)) {
             "Application ACK mismatch"
         }
-        clearDeadline()
+        clearDeadline(BleDeadlines.Operation.SEND)
         pendingSend?.success(null)
         pendingSend = null
         log("acknowledgement_received", mapOf("id" to outboundId, "bytes" to outboundLength))
@@ -582,7 +588,7 @@ class BleRelaySession(
             acknowledgement = byteArrayOf()
             receiveId = id
             receiveCount = count
-            deadline("reassembly")
+            deadline("reassembly", BleDeadlines.Operation.RECEIVE)
         }
         require(receiveId == id && receiveCount == count && receiveIndex == index) {
             "Out-of-order frame"
@@ -601,7 +607,7 @@ class BleRelaySession(
             emit(mapOf("event" to "message", "connectionId" to connectionId,
                 "message" to message))
             resetReceive()
-            clearDeadline()
+            clearDeadline(BleDeadlines.Operation.RECEIVE)
             if (!fromCentral) writeAckToServer()
         }
     }
@@ -628,7 +634,7 @@ class BleRelaySession(
     private fun stop(reason: String, notify: Boolean) {
         if (!active) return
         active = false
-        clearDeadline()
+        deadlines.clearAll()
         pendingConnect?.error("ble_error", reason, null)
         pendingConnect = null
         pendingAdvertise?.error("ble_error", reason, null)
