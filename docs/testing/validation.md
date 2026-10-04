@@ -1,7 +1,7 @@
 # Validation record — 2026-10-04
 
-Task status: **BLE POC debug APK and physical-device validation passed**. The
-product host's native platform builds and the BLE negative-case matrix remain
+Task status: **BLE POC and Android product transport physical validation passed**.
+The product UI, service-request flow, and BLE negative-case matrix remain
 unverified.
 
 ## Environment
@@ -61,12 +61,35 @@ discovery, connection, and data/ACK characteristic discovery were logged in
 each direction. Timeout behavior was not tested. The logs were collected with
 `adb logcat -v time OfflineRelayBLE:I '*:S'` on both devices.
 
+## OfflineRelay Android product transport - 2026-10-04
+
+The production host adapter APK was built with Flutter 3.47.6 and installed on
+the same two Android 16 (API 36) phones. The transport reused the validated POC
+service and characteristic UUIDs, 16-byte framing, sequential GATT writes,
+reassembly, 256-byte message cap, and application ACK format. Discovery used a
+service UUID scan filter. Both apps remained in the foreground.
+
+OPPO CPH2729 advertised its profile. Realme RMX3998IN discovered it, connected,
+and completed service/characteristic discovery. OPPO surfaced an incoming
+connection. The phones then exchanged these arbitrary protocol envelopes in
+both directions; both sends completed with the BLE transport application ACK:
+
+```json
+{"version":1,"id":"4264eeae9e770ed8a1ba4cf565d1cb04","type":"chat","body":{"text":"Generic OfflineRelay JSON over BLE"}}
+{"version":1,"id":"f9581d450dd05e78681804c83a99878b","type":"connection_accept","body":{"requestId":"4264eeae9e770ed8a1ba4cf565d1cb04"}}
+```
+
+Realme logged exact receipt of the 120-byte chat envelope and OPPO logged exact
+receipt of the 136-byte reverse envelope. Native logs recorded the matching
+message lengths and `acknowledgement_received` on both devices. This validates
+the Android host adapter on these devices, not the Nearby/Chat UI or the full
+negative-case device matrix.
+
 ## Required next environment work
 
-The BLE POC debug APK and its baseline physical-device runbook are verified.
-Timeouts and the full negative-case [device matrix](device-matrix.md) remain to
-be tested. The product host still needs native build validation; its Linux
-toolchain checkpoint lacked Ninja, clang++, and GTK 3 development prerequisites.
-iOS/macOS and Windows product-host builds have not been validated. These
-remaining build and matrix checks do not change the successful BLE POC results
-above.
+The BLE POC and Android product host debug APKs and their described physical
+tests are verified. Timeout behavior and the full negative-case
+[device matrix](device-matrix.md) remain to be tested. Product UI, chat and
+service-request flows are not implemented. iOS/macOS and Windows product-host
+builds have not been validated. These remaining checks do not change the BLE
+results above.
