@@ -62,6 +62,7 @@ class RelayDemoController extends ChangeNotifier {
   RelayConnection? _connection;
   RelayConnection? _incomingConnection;
   String? _outgoingRequestId;
+  String? _acceptingRequestId;
   int _sessionEpoch = 0;
   bool _disposed = false;
   Timer? _incomingSetupTimer;
@@ -198,6 +199,7 @@ class RelayDemoController extends ChangeNotifier {
       throw StateError('There is no connection request to accept.');
     }
     _connection = connection;
+    _acceptingRequestId = requestId;
     remoteName = incomingPeerName ?? connection.peer.label;
     incomingPeerName = null;
     incomingRequestId = null;
@@ -214,6 +216,7 @@ class RelayDemoController extends ChangeNotifier {
       );
       if (!_isCurrent(connection)) return;
       inChat = true;
+      _acceptingRequestId = null;
       status = 'Connected with $remoteName.';
       notifyListeners();
     } catch (error) {
@@ -329,6 +332,19 @@ class RelayDemoController extends ChangeNotifier {
   }
 
   void _onHelperAccepted(HelperAcceptedEvent event) {
+    final current = _incomingConnection ?? _connection;
+    final expectedRequest = incomingRequestId ?? _acceptingRequestId;
+    if (_disposed ||
+        role != RelayUserRole.internetHelper ||
+        inChat ||
+        current == null ||
+        !identical(event.connection, current) ||
+        expectedRequest == null ||
+        event.requestId != expectedRequest) {
+      return;
+    }
+    _incomingSetupTimer?.cancel();
+    _incomingSetupTimer = null;
     final pending = _incomingConnection;
     if (pending != null) {
       _connection = pending;
@@ -453,6 +469,7 @@ class RelayDemoController extends ChangeNotifier {
     _connection = null;
     _incomingConnection = null;
     _outgoingRequestId = null;
+    _acceptingRequestId = null;
     _clearIncomingRequest();
     remoteName = null;
     messages.clear();

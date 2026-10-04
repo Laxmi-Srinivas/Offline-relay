@@ -19,6 +19,7 @@ final class BleRelayTransport
       StreamController<HelperAcceptedEvent>.broadcast();
   final _discoveries = <StreamController<RelayPeer>>{};
   final _connections = <String, _BleRelayConnection>{};
+  final _helperConnectionIds = <String>{};
   late final StreamSubscription<Object?> _eventSubscription;
   bool _disposed = false;
   bool _scanning = false;
@@ -118,6 +119,7 @@ final class BleRelayTransport
         break;
       case 'incomingConnection':
         final id = event['connectionId'];
+        if (id is String) _helperConnectionIds.add(id);
         if (id is String && _connections.containsKey(id)) break;
         final connection = _connectionFrom(id, event['peer']);
         _incoming.add(connection);
@@ -132,14 +134,23 @@ final class BleRelayTransport
         break;
       case 'helperAccepted':
         final id = event['connectionId'];
-        if (id is String) {
+        if (id is String && _helperConnectionIds.contains(id)) {
           _acceptedConnections.add(
             HelperAcceptedEvent(
               connectionId: id,
               requestId: event['requestId'] as String?,
               peerName: event['peerName'] as String? ?? 'Nearby user',
+              connection: _connections[id],
             ),
           );
+        }
+        break;
+      case 'helperSnapshot':
+        final activeId = event['connectionId'];
+        for (final id in List.of(_helperConnectionIds)) {
+          if (id == activeId) continue;
+          _helperConnectionIds.remove(id);
+          _connections.remove(id)?._finish('Helper conversation ended.');
         }
         break;
       case 'message':
@@ -152,6 +163,7 @@ final class BleRelayTransport
       case 'disconnected':
         final id = event['connectionId'];
         if (id is String) {
+          _helperConnectionIds.remove(id);
           _connections
               .remove(id)
               ?._finish(event['reason']?.toString() ?? 'Disconnected');
@@ -190,6 +202,7 @@ final class BleRelayTransport
           : _peerFrom(rawPeer);
       return _BleRelayConnection(rawId, peer, _methods, () {
         _connections.remove(rawId);
+        _helperConnectionIds.remove(rawId);
       });
     });
     return connection;

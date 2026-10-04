@@ -10,11 +10,11 @@ import android.os.Build
 import android.os.IBinder
 import dev.offlinerelay.offline_relay.ble.BleRelayForegroundService
 import dev.offlinerelay.offline_relay.ble.BleRelaySession
+import dev.offlinerelay.offline_relay.ble.BoundedEventBuffer
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
-import java.util.ArrayDeque
 
 class MainActivity : FlutterActivity() {
     companion object {
@@ -30,7 +30,7 @@ class MainActivity : FlutterActivity() {
         Manifest.permission.BLUETOOTH_ADVERTISE,
     )
     private var eventSink: EventChannel.EventSink? = null
-    private val unattachedEvents = ArrayDeque<Map<String, Any?>>()
+    private val unattachedEvents = BoundedEventBuffer()
     private var session: BleRelaySession? = null
     private var pendingPermissionResult: MethodChannel.Result? = null
     private var pendingPermissionAction: (() -> Unit)? = null
@@ -42,7 +42,7 @@ class MainActivity : FlutterActivity() {
     private val helperConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
             helperBinder = service as? BleRelayForegroundService.LocalBinder
-            helperBinder?.service()?.attach(helperEventListener)
+            if (eventSink != null) helperBinder?.service()?.attach(helperEventListener)
             pendingHelperAction?.also {
                 pendingHelperAction = null
                 it()
@@ -51,6 +51,7 @@ class MainActivity : FlutterActivity() {
 
         override fun onServiceDisconnected(name: ComponentName?) {
             helperBinder = null
+            emit(mapOf("event" to "helperSnapshot", "connectionId" to null))
             emit(mapOf("event" to "helperState", "enabled" to false))
         }
     }
@@ -58,7 +59,7 @@ class MainActivity : FlutterActivity() {
     private fun emit(event: Map<String, Any?>) {
         runOnUiThread {
             val sink = eventSink
-            if (sink != null) sink.success(event) else unattachedEvents.addLast(event)
+            if (sink != null) sink.success(event) else unattachedEvents.add(event)
             if (event["event"] == "disconnected" || event["event"] == "sessionEnded") {
                 session = null
             }
@@ -151,12 +152,12 @@ class MainActivity : FlutterActivity() {
             .setStreamHandler(object : EventChannel.StreamHandler {
                 override fun onListen(arguments: Any?, events: EventChannel.EventSink) {
                     eventSink = events
-                    unattachedEvents.forEach(events::success)
-                    unattachedEvents.clear()
+                    unattachedEvents.drain().forEach(events::success)
                     helperBinder?.service()?.attach(helperEventListener)
                 }
 
                 override fun onCancel(arguments: Any?) {
+                    helperBinder?.service()?.detach(helperEventListener)
                     eventSink = null
                 }
             })

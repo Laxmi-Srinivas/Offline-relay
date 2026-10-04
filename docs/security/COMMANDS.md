@@ -86,3 +86,38 @@ Further results will be appended after execution, not predicted.
 - `flutter analyze` passed with no issues; all 26 Flutter tests passed, including
   17 security regressions. Previous 6 native timer tests/source compilation remain
   applicable because native source did not change in this step.
+
+### Background helper integration and hardening
+
+- Draft cleanup rerun: full suite passed 27 tests; committed as `f249b07`.
+- `git cherry-pick -x a504c3fa26ab24a9218693fdfe9004cbe1aad758` imported only
+  existing background functionality on Security. Rejection conflicted with secure
+  cleanup; resolved by retaining finally-based cleanup and continued availability.
+  `git cherry-pick --continue` produced `55f67d8`, preserving original author/date,
+  recording source SHA and using the actual current committer/time. No rebase,
+  amend, merge commit, reset, push, fabricated/backdated work or other-branch edit.
+- After integration, complete Flutter suite passed 28 tests.
+- Added native-approval regressions. Old/wrong/absent/late approval tests failed
+  in three test cases before controller fix; valid snapshot restore already passed.
+  All four pass after current connection object/request matching.
+- Added four real method/event-channel bridge tests: accepted snapshot then queued
+  chat, replacement snapshot plus old approval, ended conversation, same-live-session
+  restore preserving history. All passed. They simulate channel events, not radios.
+- Full Flutter suite passed 36 tests. Analysis first found one missing-braces lint
+  in the new bridge test; corrected it and analysis passed with no issues.
+- Extended native runner: 6 existing deadline tests and 9 helper-state/buffer/alert
+  tests passed. Production policies tested with 20,000-message/request bursts,
+  wrong-session decisions, cleanup, byte/count limits, payload copies and cooldown.
+- With existing API-35 android.jar and matching Flutter embedding jar, actual BLE
+  session, MainActivity and foreground service source compilation passed with cached
+  Kotlin 2.1.20 and LifecycleOwner API 2.8.7. Only generated R.mipmap.ic_launcher
+  is represented by a TEMP compile-time placeholder. This is not Gradle resource
+  linking, the declared Kotlin 2.4.0 pipeline, an APK build or Android runtime test.
+- Native warning calls no longer attach parser exception objects; device logcat
+  check remains pending. No new persistence or product dependency was added.
+- `python docs/security/check_history_secrets.py`: 225 reachable text blobs,
+  28 binary blobs skipped, no large blobs, zero candidates for five narrow pattern
+  families. Read-only/local; not a comprehensive scan. Script prints locations only.
+- Read public primary Gradle/Dart/Flutter/JetBrains/GitHub advisory pages; compared
+  declared toolchain/locked package evidence. No source or user data uploaded.
+  Scope and coverage gaps are recorded in AUDIT.md; no vulnerability-free claim.

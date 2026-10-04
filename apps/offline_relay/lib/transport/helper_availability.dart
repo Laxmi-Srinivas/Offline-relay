@@ -1,3 +1,5 @@
+import 'package:relay_transport/relay_transport.dart';
+
 /// App-level controls exposed by the Android helper foreground service.
 abstract interface class HelperAvailabilityControl {
   Stream<HelperAvailabilityState> get availabilityStates;
@@ -19,9 +21,11 @@ class HelperAcceptedEvent {
     required this.connectionId,
     required this.requestId,
     required this.peerName,
+    this.connection,
   });
 
   final String connectionId;
   final String? requestId;
   final String peerName;
+  final RelayConnection? connection;
 }

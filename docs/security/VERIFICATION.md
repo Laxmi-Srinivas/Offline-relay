@@ -20,6 +20,16 @@ memory fix; the fifth verifies existing conversation reset. Tests cover newest-3
 incoming/local history, suppression of changed payloads with the same recent ID,
 reset for a different conversation, and the explicit 1024-ID-window limitation.
 
+After draft cleanup, existing background-feature import and helper hardening,
+the full Flutter suite passed 36 tests and analysis passed. Three new negative
+approval test cases failed before the controller fix; all four approval tests and
+four real method/event-channel snapshot tests now pass. Native runner passed
+6 deadline + 9 conversation/buffer/cooldown tests. Actual Activity/service/session
+Kotlin source compilation passed against API 35 and matching Flutter embedding;
+only the generated launcher-icon R symbol is a compile-time placeholder.
+No Android framework runtime, resources, notification delivery or full APK result
+is established by this compiler check.
+
 Using matching Flutter 3.47.6 / Dart 3.13.5, from `apps/offline_relay`:
 
 ```text
@@ -44,6 +54,10 @@ On Windows with the cached jars listed in the script:
 The script only reads compiler jars and writes compiled tests to TEMP. Override
 `-KotlinCache` and `-OutputDirectory` if needed. It does not download dependencies.
 It tests real production deadline cancellation, not the Bluetooth stack.
+It also tests production helper state/backlog/notification cooldown policies.
+Supply `-AndroidJar <path>` and `-FlutterEmbeddingJar <path>` to compile actual
+native integration with cached LifecycleOwner API 2.8.7; these optional checks
+still do not build an APK.
 
 ## Physical-device checks (not run)
 
@@ -70,11 +84,25 @@ unrelated devices or services.
    is included before verifying the gap and agreeing pairing behavior.
 9. Inspect product system logs, app files/preferences/caches and backups for the
    synthetic message and test identifiers. Do not share raw device identifiers.
+10. Help Others enabled: background UI, connect/request from A, accept then
+    disconnect A and request from B while detached; return to UI. No old A approval,
+    messages or name should approve B. Repeat with a request still pending for A.
+11. Reattach to the same accepted live connection: approved chat remains usable;
+    newest bounded background messages are delivered, no reapproval is required.
+12. Repeated changed request IDs cannot replace the pending prompt or raise repeated
+    alerts. Reconnect within 10 seconds: request remains available in UI but alert
+    may be suppressed. After cooldown a new request can alert. Process restart resets
+    cooldown; denial/revocation of notifications and unexpected service loss need checks.
+13. Subscribe then send no initial valid app request while UI is detached: close
+    after 15 seconds, free the slot and resume availability. A valid request cancels
+    that setup deadline while the helper decides. Disable availability stops the
+    service/current conversation; no stale snapshot can revive it.
 
 ## Remaining limitations
 
 Radio encryption/integrity, callback ordering, GATT duplex scheduling, device
 teardown and actual resource exhaustion are not established by source inspection.
-No database, web or helper service is implemented. iOS changes and cross-platform
+No database, web or Internet relay action is implemented. Android background helper
+availability is now included and tested locally as described above. iOS changes and cross-platform
 compatibility are deferred. Release uses the scaffold debug signing configuration;
 production distribution requires a separate signing plan.
