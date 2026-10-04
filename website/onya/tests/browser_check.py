@@ -170,6 +170,14 @@ def main():
             passed('Unique IDs, resolved accessible label references and named buttons')
             assert cdp.evaluate("document.getElementById('android-download').hidden && !document.getElementById('android-download').hasAttribute('href') && document.getElementById('iphone-demo').hidden && !document.getElementById('iphone-demo').hasAttribute('href')")
             passed('Android APK and iPhone demo links stay absent until real supplied assets exist')
+            assert cdp.evaluate("!document.getElementById('android-access').hidden && document.getElementById('ios-access').hidden")
+            cdp.evaluate("document.getElementById('choose-ios').click()")
+            assert cdp.evaluate("document.getElementById('android-access').hidden && !document.getElementById('ios-access').hidden && document.getElementById('choose-ios').getAttribute('aria-pressed') === 'true'")
+            cdp.evaluate("document.getElementById('choose-android').focus()")
+            cdp.call('Input.dispatchKeyEvent', type='keyDown', key='Enter', code='Enter', windowsVirtualKeyCode=13, text='\r')
+            cdp.call('Input.dispatchKeyEvent', type='keyUp', key='Enter', code='Enter', windowsVirtualKeyCode=13)
+            assert cdp.evaluate("!document.getElementById('android-access').hidden && document.getElementById('ios-access').hidden && document.getElementById('choose-android').getAttribute('aria-pressed') === 'true'")
+            passed('Platform selector shows only the selected instructions and supports keyboard activation')
 
             def state():
                 return cdp.evaluate("document.querySelector('.simulation').dataset.state")
@@ -292,6 +300,7 @@ def main():
             time.sleep(.3)
             assert cdp.evaluate("document.querySelector('noscript').offsetHeight > 0")
             passed('JavaScript-disabled page includes a readable noninteractive flow')
+            assert cdp.evaluate("!document.getElementById('android-access').hidden && !document.getElementById('ios-access').hidden")
             cdp.call('Emulation.setScriptExecutionDisabled', value=False)
             cdp.call('Page.navigate', url=origin + '/Offline-relay/')
             time.sleep(.2)

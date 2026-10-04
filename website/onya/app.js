@@ -142,6 +142,23 @@ buttons.restart.addEventListener('click', reset);
 document.getElementById('reset-simulation').addEventListener('click', reset);
 render(false);
 
+// Without JavaScript both platform descriptions remain readable.
+const platformPicker = document.querySelector('.platform-picker');
+const platformButtons = [document.getElementById('choose-android'), document.getElementById('choose-ios')];
+function choosePlatform(platform) {
+  for (const button of platformButtons) {
+    const selected = button.id === `choose-${platform}`;
+    button.setAttribute('aria-pressed', String(selected));
+    button.classList.toggle('button-primary', selected);
+    button.classList.toggle('button-outline', !selected);
+    document.getElementById(button.getAttribute('aria-controls')).hidden = !selected;
+  }
+}
+platformPicker.hidden = false;
+platformButtons[0].addEventListener('click', () => choosePlatform('android'));
+platformButtons[1].addEventListener('click', () => choosePlatform('ios'));
+choosePlatform('android');
+
 // Distribution links are optional. No request, embedding or download occurs here.
 const releases = window.ONYA_RELEASES;
 function safeHttpsUrl(value) {

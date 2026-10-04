@@ -76,6 +76,18 @@ or APK. All first-party paths are relative for the actual GitHub Pages project p
 
 ## Remaining checks before final submission
 
+### Platform selector follow-up
+
+The Android/iOS selector was added on the website branch. Chrome passed all 27
+browser checks, including platform panel switching with keyboard Enter, hidden
+unavailable downloads, and both platform descriptions readable without JavaScript.
+All six static check groups passed. Two initial test-harness mistakes (calling a
+helper before definition and omitting Enter's character event) were corrected;
+they were not successful test runs. No mobile code was changed.
+
+The user subsequently requested deployment. Publication is authorized; its actual
+outcome is recorded separately rather than inferred from successful local checks.
+
 1. User approves this preview and website publication.
 2. Configure repository Pages/environment, push only the website branch and run
    the prepared workflow. Inspect the actual returned URL while logged out.
