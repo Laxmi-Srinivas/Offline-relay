@@ -139,3 +139,60 @@ AES-GCM/X25519 vulnerability here. No known-vulnerable dependency finding is ass
 https://github.com/dint-dev/cryptography/security/advisories
 https://github.com/dint-dev/cryptography/issues/224
 This is bounded primary-source triage, not comprehensive advisory coverage.
+
+## Owned Android device verification (2026-10-04)
+
+Source: Security `8bf78e2`, integrated Android/shared baseline
+`0d4e2c4da1c81391d6aa33f49c60b291eab7198e`. Two owned Android 16 phones;
+synthetic profiles SecurityA/SecurityB and synthetic ASCII chat only.
+The original apps were retained with their data. Updating the original package
+failed on both with INSTALL_FAILED_UPDATE_INCOMPATIBLE (different signing keys).
+After explicit approval, installed a separate debug test package
+`dev.offlinerelay.offline_relay.securitytest` successfully on both.
+No uninstall, data clearing, device bond clearing or original app update occurred.
+
+Test APK SHA-256:
+`B67843D593A17AD1650B0EB461220FC862FD31C544C89E300A157B2624121101`.
+Version 0.0.1 (code 1); apksigner verification passed, v2 signature present.
+This is a local debug build, not a public beta release or the original tested APK.
+
+| Check | Actual result / limits |
+| --- | --- |
+| Discovery and request | Requester discovered SecurityA. Helper displayed SecurityB request with Accept/Decline. No chat before approval. |
+| Acceptance and key setup | Both reached encrypted-chat UI. Synthetic text delivered in both directions with both apps foreground. This exercises existing X25519/HKDF/AES-GCM setup; UI alone does not prove radio encryption or peer identity. |
+| Reconnect isolation | After terminating the failed session, a newly approved connection opened empty on both phones; previous markers were absent. No physical old-ciphertext injection performed; automated crypto/session regressions cover that separately. |
+| Intentional foreground end | Requester ended the replacement session; helper displayed Chat ended by SecurityB. |
+| Background incoming request | Earlier request reached the background helper and was displayed after reopening. Notification appearance itself was not independently captured. |
+| Rejection | No chat opened, but requester displayed GATT write_error status=133 instead of a clean decline message. Failed UX/recovery check; cause not established. |
+| Background chat delivery | Helper was sent Home, requester sent a synthetic message, helper reopened. Message did not appear; requester displayed write_error status=1 and Connection lost, while helper initially retained chat UI. Failed delivery/state consistency check; do not claim background guarantees. |
+| Limited logging/storage check | Requester's own current app PID logs (BLE/flutter/AndroidRuntime tags) contained no synthetic marker matches. Its files directory listed profileInstalled and shared_prefs was absent. This is not an exhaustive cache, backup or storage check. |
+
+Commands/purpose: adb install -r (signature failure, then separate-package
+success), aapt dump badging (package/version), apksigner verify --verbose
+(signature), UI Automator plus input taps/text (local synthetic journey),
+adb shell input keyevent 3 and am start (background/resume), own-package pidof
+and scoped logcat marker filtering (limited logging), run-as test package ls
+files shared_prefs (limited storage). Broad user notification logs were not read.
+Vendor pm grant was denied; normal app permission dialogs were used, with no
+permission safeguard disabled. Bluetooth was enabled on the requester for this
+local check. Device serials, raw UI dumps, APKs and signing keys are not committed.
+
+Reproduce the separate package without modifying tracked mobile build files:
+use the documented init script in `test/native/security-test.init.gradle`, from
+apps/offline_relay/android after the normal Flutter debug build/setup:
+
+```powershell
+./gradlew.bat --init-script ../test/native/security-test.init.gradle assembleDebug '-Ptarget-platform=android-arm,android-arm64,android-x64' '-Ptarget=lib/main.dart' '-Ptrack-widget-creation=true'
+```
+
+Verify output package with aapt before installing
+build/app/outputs/apk/debug/app-debug.apk. A first direct Gradle attempt without
+quoting the -Ptarget argument failed in PowerShell; quoted retry succeeded.
+Direct Gradle emitted existing Android/Kotlin configuration deprecation warnings.
+
+Next: reproduce rejection and background GATT errors under controlled foreground,
+background and reconnect conditions before changing transport timing or lifecycle.
+Late native errors must also be checked for connection scoping. No root cause or
+fix is claimed from a generic GATT status alone. BLE link security, active MITM,
+physical malformed/replay/flood tests and exhaustive logs/backups remain pending.
+These failures and uncertainties are retained rather than counted as passed.

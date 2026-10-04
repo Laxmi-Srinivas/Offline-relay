@@ -1,0 +1,8 @@
+// Local-only side-by-side debug package. No signing secrets or release changes.
+gradle.beforeProject { project ->
+    if (project.path == ':app') {
+        project.plugins.withId('com.android.application') {
+            project.android.buildTypes.getByName('debug').applicationIdSuffix = '.securitytest'
+        }
+    }
+}
