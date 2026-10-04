@@ -1,6 +1,6 @@
 # Throwaway BLE POC — Android only
 
-Status: source implemented; native build and physical-device validation pending.
+Status: baseline Android and iPhone-pair physical validation recorded; negative-case checks remain pending.
 No platform is currently verified to run this POC. Intended runtime: two
 physical Android 12+ (API 31+) phones with BLE; the peripheral must support
 advertising. No iOS, desktop, or web BLE implementation is present. This
@@ -96,44 +96,69 @@ API references: [Android GATT callbacks](https://developer.android.com/reference
 [GATT server](https://developer.android.com/reference/android/bluetooth/BluetoothGattServer),
 [permissions](https://developer.android.com/develop/connectivity/bluetooth/bt-permissions).
 
-## iOS central POC
+## iOS central and peripheral POC
 
-The experimental iOS host uses native CoreBluetooth and the exact Android wire
-format above. No BLE plugin or product-host dependency is added. iOS peripheral
-advertising is not implemented; **Advertise** returns `unsupported_role` on iOS.
+Current iOS development/validation scope: two physical iPhones, foreground only.
+Native CoreBluetooth implements both roles in this disposable host. The original
+central source and wire helper remain unchanged. No third-party BLE plugin or
+product-host integration is added.
 
-Build: `flutter build ios --simulator --debug` from this directory. A simulator
-build checks compilation only. For hardware, open `ios/Runner.xcworkspace`, select
-the Runner target and a valid signing Team, connect and trust an iPhone, enable
-Developer Mode if requested, and run on that device. The POC bundle identifier is
-`dev.offlinerelay.experiments.blePoc`; provisioning must cover that identifier.
+Build: `flutter build ios --simulator --debug`. Compilation is not BLE evidence.
+For each physical iPhone, open `ios/Runner.xcworkspace`, configure a valid Runner
+signing Team for `dev.offlinerelay.experiments.blePoc`, connect/trust the phone,
+enable Developer Mode if required, and deploy. Grant Bluetooth permission.
 
-On a validated Android phone, start **Advertise**. On iPhone, grant Bluetooth
-access, press **Discover + connect**, and wait for `central_ready`. Send Hello,
-wait for `acknowledgement_received`, then send 256 bytes and wait for its ACK.
-Require matching Android `message_received ... exact_payload_verified=true`
-logs and iPhone ACK IDs/lengths. Stop and repeat. Keep both apps in the foreground
-and only one pair in range. No iPhone physical success has been established.
+1. On iPhone B, select **PERIPHERAL: Advertise**. Wait for `advertising_started`.
+2. On iPhone A, select **CENTRAL: Discover + connect**. Wait for `central_ready`.
+3. Send Hello from A; require B's exact Hello verification and A's matching ACK.
+4. Wait for ACK, then send 256 bytes; require exact `00..ff` verification on B
+   and matching ID/length ACK on A.
+5. Stop both sessions, swap iPhone roles, and repeat with logs from both phones.
 
-The iOS central has 15-second scan, connection, service/characteristic discovery,
-and combined message-write/ACK deadlines, plus a bounded Bluetooth-readiness
-wait. It sends one frame per successful `.withResponse` callback, then reads ACK
-once. It does not request larger frames, subscribe, retry, or reconnect. Stop,
-background entry, errors, and radio loss detach delegates and cancel pending
-operations. Each restart uses a fresh session/manager; timer generation checks
-prevent cancelled deadlines from affecting later stages.
+Keep both apps open and only one pair in range. Turn off Wi-Fi/cellular Internet
+while leaving Bluetooth enabled to record the offline run. The user reported
+successful physical two-iPhone Hello and 256-byte exchanges with ACKs in both
+role assignments; see [the validation record](../../docs/testing/ios-peripheral-checkpoint.md).
+Cross-platform testing is outside this phase.
 
-Timestamped diagnostics go to the Flutter log viewer and `NSLog` with the
-`OfflineRelayBLE` prefix. Use Xcode's device console to preserve logs. A local
-`disconnect_requested` or stopped log does not claim a confirmed radio disconnect.
+The peripheral publishes one primary service, DATA `.write` / `.writeable`, and
+ACK `.read` / `.readable`, with dynamic values. It advertises only the existing
+service UUID. No notifications or new characteristics are used. DATA batches
+are validated on a value-type candidate and committed atomically; failed batches
+produce an ATT error and clear the owning receiver state. A second logical peer
+is rejected without corrupting the first peer's state. Complete payloads must
+match exactly Hello or `00..ff`; only then is the four-byte ACK available.
 
-Focused native byte tests run the actual Swift framing helper on macOS:
+CoreBluetooth does not expose a general peripheral-role connect/disconnect
+callback for this read/write-only service. `central_interaction` logs report ATT
+activity, not a confirmed link connection. Reassembly has a 15-second deadline
+from its first frame (not refreshed by each frame). Completed ACK/peer ownership
+expires after 15 seconds of idle interaction. This clears stale state after a
+silent disconnect, but cannot reset immediately at the radio disconnect event.
+After expiry, the next peer may start a fresh message. A new frame zero clears
+the previous ACK. Stop, role restart, background entry, and Bluetooth state loss
+clear state; stop also removes services and detaches the manager delegate.
+Fresh managers and timer generations isolate old callbacks. There is no promise
+that removing services forcibly disconnects every central link.
+
+Read ACK promptly after the final frame, as the unchanged central already does.
+Idle advertising continues after receiver/peer expiry. Bluetooth readiness,
+service registration, and advertising startup have 15-second fatal deadlines.
+The central's existing discovery, write sequencing, ACK checking, and deadlines
+remain unchanged.
+
+Timestamped diagnostics go to the Flutter viewer and `NSLog` (`OfflineRelayBLE`).
+Capture both iPhones' Xcode device logs. Test denied permission, Bluetooth off,
+absent peer, interrupted transfer, missing ACK, malformed frames, reassembly
+expiry, idle peer expiry, foreground exit, and stop/restart. Test timer/delegate
+behavior physically; native byte tests do not exercise CoreBluetooth callbacks.
+
+Run actual native wire/reassembly helpers on macOS:
 
 ```sh
-xcrun swiftc ios/Runner/BleProtocol.swift test/native/main.swift -o /tmp/offlinerelay-protocol-tests
+xcrun swiftc ios/Runner/BleProtocol.swift ios/Runner/BleReassembler.swift test/native/main.swift -o /tmp/offlinerelay-protocol-tests
 /tmp/offlinerelay-protocol-tests
 ```
 
-These tests check byte vectors and framing, not CoreBluetooth delivery or timeout
-behavior. Physical permission, missing-peer, missing-ACK, interrupted-transfer,
-and radio-off checks remain required.
+Tests cover exact vectors/ACKs, frame boundaries, ID rollover, ordering, corrupt
+payloads, reset/recovery, withheld ACK, and isolated candidates for atomic batches.

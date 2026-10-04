@@ -70,3 +70,13 @@ toolchain checkpoint lacked Ninja, clang++, and GTK 3 development prerequisites.
 iOS/macOS and Windows product-host builds have not been validated. These
 remaining build and matrix checks do not change the successful BLE POC results
 above.
+
+## Physical iPhone BLE POC — 2026-10-04
+
+The user reported successful native CoreBluetooth BLE validation using two real
+iPhones on `ios-mvp`. Both Central/Peripheral role assignments passed exact
+UTF-8 Hello transfer with application ACK, and exact 256-byte `00..ff` transfer
+with application ACK. These were physical-device results, not simulator results.
+See the [iOS validation record](ios-peripheral-checkpoint.md) for the role matrix,
+evidence attribution, and remaining negative-case checks. No Android ↔ iPhone
+testing was performed during this iOS-only phase.

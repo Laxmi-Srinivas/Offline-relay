@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -60,17 +61,21 @@ class _BleDiagnosticsState extends State<BleDiagnostics> {
         const Padding(
           padding: EdgeInsets.all(8),
           child: Text(
-            'Android 12+ / iOS central • foreground only\n'
-            'Android B: Advertise. iOS/Android A: Discover. One pair.\n'
+            'Foreground BLE diagnostics • one pair at a time\n'
+            'iPhone B: PERIPHERAL. iPhone A: CENTRAL.\n'
             'Grant permission, then press the role button again.',
           ),
         ),
         Wrap(
           spacing: 8,
           children: [
-            for (final entry in const {
-              'advertise': 'B: Advertise',
-              'discover': 'A: Discover + connect',
+            for (final entry in {
+              'advertise': defaultTargetPlatform == TargetPlatform.iOS
+                  ? 'PERIPHERAL: Advertise'
+                  : 'B: Advertise',
+              'discover': defaultTargetPlatform == TargetPlatform.iOS
+                  ? 'CENTRAL: Discover + connect'
+                  : 'A: Discover + connect',
               'hello': 'Send Hello',
               'larger': 'Send 256 bytes',
               'stop': 'Stop',

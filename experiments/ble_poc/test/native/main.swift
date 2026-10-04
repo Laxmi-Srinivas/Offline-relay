@@ -26,3 +26,58 @@ for length in [1, 16, 17, 255, 256] {
   check(Data(chunks.flatMap { Array($0.dropFirst(4)) }) == payload, "boundary round trip")
 }
 print("PASS: native Hello, 00..ff, ACK, frame boundaries, ID rollover")
+
+var receiver = BleReassembler()
+let receivedHello = try receiver.receive(BleProtocol.frames(BleProtocol.hello, id: 1)[0])
+check(receivedHello == BleProtocol.hello, "receive Hello")
+check(receiver.acknowledgement == Data([1, 1, 0, 5]), "receiver Hello ACK")
+for (index, frame) in frames.enumerated() {
+  let result = try receiver.receive(frame)
+  if index < 15 {
+    check(result == nil && receiver.acknowledgement == nil && receiver.isReceiving, "ACK withheld until complete")
+  } else {
+    check(result == BleProtocol.larger && !receiver.isReceiving, "complete larger vector")
+    check(receiver.acknowledgement == Data([1, 2, 1, 0]), "receiver larger ACK")
+  }
+}
+func rejects(_ sequence: [Data], _ label: String) {
+  var receiver = BleReassembler()
+  do {
+    for frame in sequence { _ = try receiver.receive(frame) }
+    fatalError("accepted invalid sequence: \(label)")
+  } catch {
+    check(receiver.acknowledgement == nil && !receiver.isReceiving && receiver.payload.isEmpty, "reset after \(label)")
+    do {
+      let result = try receiver.receive(BleProtocol.frames(BleProtocol.hello, id: 255)[0])
+      check(result == BleProtocol.hello, "recovery after \(label)")
+    } catch { fatalError("recovery failed: \(label)") }
+  }
+}
+for bad in [Data(), Data([1, 1, 0, 1]), Data(repeating: 1, count: 21),
+  Data([2, 1, 0, 1, 0]), Data([1, 0, 0, 1, 0]), Data([1, 1, 0, 0, 0]),
+  Data([1, 1, 0, 17, 0]), Data([1, 1, 1, 1, 0]), Data([1, 1, 0, 2, 0]),
+  Data([1, 1, 0, 1, 0])] { rejects([bad], "malformed/vector") }
+rejects([frames[1]], "missing first")
+rejects([frames[0], frames[0]], "overlap/duplicate")
+rejects([frames[0], frames[2]], "skipped frame")
+var wrongID = Array(frames[1]); wrongID[1] = 3
+rejects([frames[0], Data(wrongID)], "changed ID")
+var wrongCount = Array(frames[1]); wrongCount[3] = 15
+rejects([frames[0], Data(wrongCount)], "changed count")
+var corrupt = frames
+var final = Array(corrupt[15]); final[19] = 0; corrupt[15] = Data(final)
+rejects(corrupt, "corrupt completed vector")
+var incomplete = BleReassembler()
+_ = try incomplete.receive(frames[0])
+check(incomplete.acknowledgement == nil, "incomplete has no ACK")
+incomplete.reset() // same reset used for timeout/restart cleanup
+check(!incomplete.isReceiving && incomplete.payload.isEmpty && incomplete.acknowledgement == nil, "timeout reset")
+_ = try incomplete.receive(BleProtocol.frames(BleProtocol.hello, id: 1)[0])
+incomplete.reset()
+check(incomplete.acknowledgement == nil, "cleanup clears completed ACK")
+// Value semantics allow an invalid ATT batch to be discarded atomically.
+var committed = BleReassembler()
+var candidate = committed
+_ = try candidate.receive(frames[0])
+check(!committed.isReceiving && committed.payload.isEmpty, "uncommitted batch isolated")
+print("PASS: peripheral reassembly, exact vectors, ACK timing, malformed/order rejection, reset, atomic candidate")

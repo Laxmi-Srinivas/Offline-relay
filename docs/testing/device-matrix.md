@@ -1,14 +1,14 @@
 # Device matrix and acceptance evidence
 
-No physical-device tests have been performed. All combinations below are targets
-or candidates, not supported-platform claims. Record exact hardware, OS, app
-revision, role assignment, permissions, and logs for each run.
+Baseline physical results are recorded in [validation.md](validation.md).
+Remaining combinations are targets, not supported-platform claims. Record exact
+hardware, OS, app revision, role assignment, permissions, and logs for each run.
 
 | Device combination | Candidate | Current evidence |
 | --- | --- | --- |
 | Android 12+ ↔ Android 12+ | BLE, test both role assignments | Native source prepared; APK blocked; not tested |
 | Android ↔ iOS | BLE, test both role assignments | Not tested |
-| iOS ↔ iOS | BLE | Not tested |
+| iOS ↔ iOS | BLE | User-reported physical pass in both roles: Hello + ACK, 256-byte 00..ff + ACK; see [record](ios-peripheral-checkpoint.md) |
 | Linux/macOS/Windows laptops | LAN, each actual pair separately | Not implemented/tested |
 | Phone ↔ laptop on shared LAN | Possible later extension | Unverified, not initial POC |
 
