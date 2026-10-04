@@ -11,7 +11,8 @@ authenticated transport has not been demonstrated by this security work.
 
 - `apps/offline_relay/`: Nearby/Chat UI, controller, Android bridge and native GATT
   adapter/background service. Other platform folders on this branch are scaffolds.
-  iOS implementation exists separately on `ios-mvp` and is deferred in this review.
+  Committed iOS implementation was selectively imported from `ios-mvp` for
+  authorized hardening; native fixes await Mac verification (docs/security/IOS.md).
 - `packages/relay_transport/`: transport-independent interfaces and bounded JSON
   envelopes. Android's platform adapter lives in the application.
 - `experiments/ble_poc/`: separate Android 12+ central/peripheral experiment.
@@ -65,5 +66,6 @@ the screens do not need them. App lockfiles are retained.
 
 Security work is isolated on `Security` in a separate worktree. Existing commits
 are retained, including provenance for the imported background feature. Existing
-local main/native branches and their files are not edited; iOS work is deferred. No history rewrite,
+local main/native/iOS branches and their files are not edited. iOS native verification
+awaits Mac access. No history rewrite,
 force-push or merge is part of this work. Publishing requires explicit authorization.

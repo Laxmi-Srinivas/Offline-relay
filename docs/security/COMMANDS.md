@@ -16,6 +16,34 @@ publishing Security only; other branches and history remain protected.
 
 Further results will be appended after execution, not predicted.
 
+### Subsequent authorized iOS work
+
+- Read-only status/log/diff/show inspected origin/ios-mvp
+  57d8348fd4f3a7b29742925aed7804370ff993fe against Security. The user authorized
+  fixes to existing committed iOS functionality on Security only.
+- A first Python inline import command failed at parsing because PowerShell
+  removed argument quoting. It did not execute or write source. A literal TEMP
+  Python script then imported 11 changed iOS files and the existing Swift test
+  entry point using read-only `git show` bytes. No branch switch/merge/rewrite.
+- Committed baseline import as 32905c0 with source SHA in its commit message.
+  `git diff 32905c0 origin/ios-mvp -- apps/offline_relay/ios` was empty: imported
+  native source matches that snapshot. This is provenance, not runtime validation.
+- Prepared native consent/session/alert fixes and native regressions. The user
+  has Mac access later; compilation and physical verification are deferred.
+- `flutter test --reporter compact`: all 38 tests passed; `flutter analyze`:
+  no issues. Two additional bridge tests simulate idle/ended iOS replay events.
+  Flutter dependency resolution succeeded without changing the lockfile; notices
+  about available newer packages are not matching vulnerability advisories.
+- `where.exe swift` found no compiler. WSL listing reported WSL not installed;
+  checked conventional Swift installation folders were absent. No tool installation,
+  remote execution, source upload, Swift test or iOS build performed.
+- Exported only three pending native files to a local TEMP patch using
+  `git diff --binary`; `git apply --reverse --check` passed without applying or
+  reversing anything. Patch hash and Mac commands are in IOS.md.
+- `git diff --check` passed. Commit only verified shared bridge tests and audit
+  records; leave native changes uncommitted pending Mac verification. Original
+  checkout/other branches remain untouched. No new device test results claimed.
+
 ### Draft isolation and read-only pause
 
 - After commit `6c52d4a`, a widget regression reproduced an unsent draft surviving

@@ -128,4 +128,27 @@ void main() {
     expect(controller.inChat, isTrue);
     expect(controller.messages.single.text, 'synthetic local');
   });
+  test('idle iOS snapshot preserves offline user role', () async {
+    controller.role = RelayUserRole.offlineUser;
+    emit({'event': 'helperSnapshot', 'connectionId': null});
+    await Future<void>.delayed(Duration.zero);
+    expect(controller.role, RelayUserRole.offlineUser);
+    expect(controller.inChat, isFalse);
+  });
+  test('iOS empty replay clears detached chat without availability event', () async {
+    snapshot('A', accepted: true);
+    await Future<void>.delayed(Duration.zero);
+    await controller.sendChat('synthetic history');
+    emit({'event': 'helperSnapshot', 'connectionId': null});
+    emit({
+      'event': 'helperAccepted',
+      'connectionId': 'A',
+      'requestId': 'request-A',
+      'peerName': 'A',
+    });
+    await Future<void>.delayed(Duration.zero);
+    expect(controller.inChat, isFalse);
+    expect(controller.messages, isEmpty);
+    expect(controller.remoteName, isNull);
+  });
 }

@@ -108,6 +108,8 @@ unrelated devices or services.
 Radio encryption/integrity, callback ordering, GATT duplex scheduling, device
 teardown and actual resource exhaustion are not established by source inspection.
 No database, web or Internet relay action is implemented. Android background helper
-availability is now included and tested locally as described above. iOS changes and cross-platform
-compatibility are deferred. Release uses the scaffold debug signing configuration;
+availability is now included and tested locally as described above. Authorized iOS
+changes are prepared; shared Flutter tests now total 38, while Swift compilation,
+iOS build and cross-platform device compatibility remain pending (see IOS.md).
+Release uses the scaffold debug signing configuration;
 production distribution requires a separate signing plan.

@@ -4,9 +4,12 @@ Work is confined to branch `Security`, based on committed Android Flutter source
 `e402922d80f9830bce08a752dc8a1e05a895bd30` (local `origin/main` at review time).
 The separate worktree preserves the original native-Android checkout. Existing
 branches must not be modified, merged, rewritten, or pushed by this work.
-iOS at `887bc13467a3aecebf3dc20792e190f022e72e5c` was inventoried, not adopted
-as the implementation base. Website, desktop transports, Internet relay actions
-and persistence are absent or incomplete and deferred. No database is introduced.
+iOS was initially inventoried at `887bc13467a3aecebf3dc20792e190f022e72e5c`.
+The user subsequently authorized iOS hardening; committed native source from
+`57d8348fd4f3a7b29742925aed7804370ff993fe` is selectively imported on Security.
+See [IOS.md](IOS.md) for findings and the pending native verification/commit boundary.
+Website, desktop transports and Internet relay actions remain absent/incomplete.
+iOS has availability/profile preferences; chat remains in memory. No database is introduced.
 Committed Android background availability from
 `a504c3fa26ab24a9218693fdfe9004cbe1aad758` was imported on Security with
 `git cherry-pick -x` as `55f67d8`, retaining original authorship/provenance.
@@ -59,7 +62,8 @@ Native path: `apps/offline_relay/android/app/src/main/kotlin/dev/offlinerelay/of
 | S6 | No required encrypted/authenticated link or application key exchange. Native 121-138, 176-187, 190-212, 551-570; envelope encode in packages/relay_transport/lib/relay_transport.dart 126-142. | Radio attacker would need an unprotected link and suitable capability; interception not demonstrated. User selection and IDs/ACK checks are not cryptographic authentication. | Medium / high for missing policy, actual link state unknown | Device security inspection and pairing UX agreement required; no crypto implemented |
 
 The controller on the reviewed iOS branch is identical and shares S1/S4/S5;
-native iOS remediation remains deferred. Android and iOS branches diverge in
+native iOS remediation is now prepared, pending Mac verification (see IOS.md).
+Android and iOS branches diverge in
 their native adapters; no interoperability or merge is implied.
 
 ## Background review (immutable source a504c3f on origin/main)
