@@ -102,7 +102,7 @@ final class RelaySecureSession {
     if (_closed || key == null) {
       throw StateError('Secure session is not ready.');
     }
-    if (_sendCounter == 0x7FFFFFFFFFFFFFFF) {
+    if (_sendCounter == 0xFFFFFFFFFFFFFFF) {
       throw StateError('Secure session message counter is exhausted.');
     }
     final counter = _sendCounter++;
@@ -130,7 +130,7 @@ final class RelaySecureSession {
       throw StateError('Secure session is not ready.');
     }
     if (counter < 0 ||
-        counter > 0x7FFFFFFFFFFFFFFF ||
+        counter > 0xFFFFFFFFFFFFFFF ||
         counter <= _lastReceiveCounter) {
       throw const FormatException(
         'Repeated or invalid encrypted message counter.',
@@ -191,3 +191,9 @@ final class RelaySecureSession {
     return 0;
   }
 }
+
+
+
+
+
+
