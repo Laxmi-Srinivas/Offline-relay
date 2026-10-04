@@ -1,61 +1,38 @@
-# Architecture overview
+# onya hackathon architecture
 
-OfflineRelay's Android MVP keeps the existing BLE transport below a small
-Flutter application/controller layer. Chat encryption is applied above BLE;
-the native GATT session sees only bounded application envelopes and does not
-own cryptographic keys.
+Supported paths: Android ? Android and iPhone ? iPhone. Cross-platform phone
+communication is excluded. The website provides installation guidance; it does
+not connect to BLE or relay chat.
 
 ```text
-Figma-based Flutter UI
-        ↓
-RelayDemoController and in-memory chat/request state
-        ↓
-ephemeral key exchange + authenticated encrypted application messages
-        ↓
-RelayTransport / RelayConnection (256-byte complete-message boundary)
-        ↓
-Flutter MethodChannel/EventChannel bridge
-        ↓
-Android BLE GATT session / helper foreground service
+Android Flutter UI/controller             iPhone Flutter UI/controller
+  apps/offline_relay                        apps/offline_relay_ios
+       |                                         |
+Encrypted Relay envelopes                Existing plaintext Relay envelopes
+  packages/relay_transport                 packages/relay_transport_ios
+       |                                         |
+MethodChannel / EventChannel             MethodChannel / EventChannel
+       |                                         |
+Kotlin GATT + foreground helper           Swift CoreBluetooth + helper owner
+       |                                         |
+another Android                          another iPhone
 ```
 
-The controller owns one foreground chat/request at a time. Help Others
-advertising remains owned by the Android connected-device foreground service
-while the Activity is backgrounded. That service continues to surface incoming
-requests through the existing channels and notification. Activity recreation
-does not take ownership of or replace the native helper BLE session.
+Both protocols bound complete envelopes to 256 bytes. Native adapters fragment
+them into 16-byte payloads with a 4-byte header, reassemble and acknowledge whole
+messages. Historical UUIDs are unchanged; they do not establish app compatibility.
 
-Normal rotation retains Flutter state through the manifest's configuration-change
-handling. A genuine Activity/Flutter-engine recreation restores a pending helper
-request from the foreground service, but closes an already accepted connection
-whose in-memory encryption keys were lost. A fresh session is then required.
-The requester session is Activity-owned and stops on leaving the foreground.
-Helper advertising survives Activity backgrounding; force-stop/process death
-does not restore availability automatically.
+Android comes from `cf59a02`; iPhone comes from `ios-mvp` at `4cf4865`.
+The iOS copy uses an isolated path dependency so Android protocol changes cannot
+alter its validated decoder. Internal package names, IDs and native namespaces
+remain unchanged. This is an integration boundary, not a networking rewrite.
 
-Connection/service discovery and GATT transfer deadlines are 15 seconds;
-reassembly, outgoing ACK waits and incoming ACK writes have separate timers.
-Connection requests expire after 60 seconds and automatic security setup
-after two minutes. Application sends are serialized; central GATT data/ACK/read
-operations share a serial queue. Remote closure waits for the final transport ACK.
+Android retains X25519/HKDF/AES-GCM, encrypted chat/End Chat, local Report and
+foreground helper notifications. iOS retains acceptance, concurrent requester
+selection, plaintext chat, disconnect-on-back, background helper availability
+and local notifications. No iOS app encryption or Report feature is claimed.
 
-The app layer owns request acceptance, chat messages, terminal chat state,
-local report state, and the session cipher. The transport reports complete
-messages and disconnect errors. The Android BLE adapter continues to enforce
-the 256-byte bound and owns GATT framing, reassembly, application ACKs, and
-timeouts.
-
-## Repository boundaries
-
-- `apps/offline_relay/`: Android Flutter host, controller, UI, BLE bridge, and
-  application-level session encryption.
-- `packages/relay_transport/`: shared peer, connection, profile, and
-  versioned-envelope contract.
-- `experiments/ble_poc/`: frozen physical-test reference implementation.
-- `docs/`: protocol, security, architecture, and validation notes.
-
-No chat/report data is persisted or sent to a backend. Reports remain local to
-the current in-memory chat. The app does not currently provide persistent peer
-identity or an authenticated trust relationship. Ephemeral key exchange and
-encrypted key confirmation happen automatically, with no user verification.
-Active man-in-the-middle impersonation is outside this encryption design.
+The existing website layout and interaction are reused with corrected scope and
+security claims. Deployment packages only public static files. The frozen POC,
+interop adapter and native Android replacement are excluded from final app
+integration. See [verification](../testing/final-integration.md).

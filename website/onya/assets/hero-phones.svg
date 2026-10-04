@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="620" height="520" viewBox="0 0 620 520">
+  <g transform="translate(30 56) rotate(-5 120 210)">
+    <rect x="4" y="8" width="236" height="416" rx="32" fill="#172B28" opacity=".08"/>
+    <rect width="236" height="416" rx="32" fill="#172B28"/><rect x="6" y="6" width="224" height="404" rx="27" fill="#F7F5EF"/>
+    <rect x="82" y="5" width="72" height="15" rx="7" fill="#172B28"/>
+    <text x="24" y="40" font-family="Arial,sans-serif" font-size="14" font-weight="700" fill="#246B57">onya.</text>
+    <text x="24" y="71" font-family="monospace" font-size="8" fill="#53625B">ALEX · REQUESTER</text>
+    <text x="24" y="103" font-family="Arial,sans-serif" font-size="22" font-weight="700" fill="#172B28">A little help?</text>
+    <text x="24" y="125" font-family="Arial,sans-serif" font-size="10" fill="#53625B">Find someone nearby.</text>
+    <rect x="18" y="151" width="200" height="157" rx="13" fill="#FFFFFF" stroke="#D8DDD2"/>
+    <circle cx="118" cy="196" r="24" fill="#A9C7B5"/>
+    <path d="M99 209c2-13 9-17 19-17s19 7 20 17" fill="#246B57"/><path d="M107 185c1-11 23-12 23 2l-2 11c-6 12-18 6-21-13" fill="#C58F6B"/><path d="M107 189c-7-10-1-23 10-23 11-1 17 10 15 19l-5-7c-9 4-13 0-15-3-1 6-1 10-5 14" fill="#172B28"/>
+    <text x="118" y="240" text-anchor="middle" font-family="Arial,sans-serif" font-size="15" font-weight="700" fill="#172B28">Jamie is nearby.</text>
+    <text x="118" y="259" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#53625B">Open to helping.</text>
+    <circle cx="83" cy="281" r="3" fill="#246B57"/><text x="93" y="284" font-family="Arial,sans-serif" font-size="9" fill="#246B57">Available</text>
+    <rect x="18" y="326" width="200" height="38" rx="7" fill="#246B57"/><text x="118" y="350" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" font-weight="700" fill="#FFFFFF">Request a connection →</text>
+    <path d="M7 378h222" stroke="#D8DDD2"/><text x="42" y="396" font-family="Arial,sans-serif" font-size="9" fill="#246B57">Nearby</text><text x="161" y="396" font-family="Arial,sans-serif" font-size="9" fill="#53625B">Profile</text>
+  </g>
+  <g transform="translate(328 29) rotate(5 120 210)">
+    <rect x="4" y="8" width="236" height="416" rx="32" fill="#172B28" opacity=".08"/>
+    <rect width="236" height="416" rx="32" fill="#172B28"/><rect x="6" y="6" width="224" height="404" rx="27" fill="#F7F5EF"/>
+    <rect x="82" y="5" width="72" height="15" rx="7" fill="#172B28"/>
+    <text x="24" y="40" font-family="Arial,sans-serif" font-size="14" font-weight="700" fill="#246B57">onya.</text>
+    <text x="24" y="71" font-family="monospace" font-size="8" fill="#53625B">JAMIE · HELPER</text>
+    <text x="24" y="103" font-family="Arial,sans-serif" font-size="21" font-weight="700" fill="#172B28">Your choice.</text>
+    <text x="24" y="125" font-family="Arial,sans-serif" font-size="10" fill="#53625B">Helping is always voluntary.</text>
+    <rect x="18" y="151" width="200" height="157" rx="13" fill="#FFFFFF" stroke="#D8DDD2"/>
+    <circle cx="118" cy="196" r="24" fill="#EDC0A5"/>
+    <path d="M99 209c2-13 9-17 19-17s19 7 20 17" fill="#246B57"/><path d="M107 185c1-11 23-12 23 2l-2 11c-6 12-18 6-21-13" fill="#EDC0A5"/><path d="M108 188c-8-6-6-20 4-24 12-4 20 5 19 19l-7-7c-6 2-9-1-12-2-1 8-1 10-4 14" fill="#172B28"/>
+    <text x="118" y="240" text-anchor="middle" font-family="Arial,sans-serif" font-size="14" font-weight="700" fill="#172B28">Alex wants to connect.</text>
+    <text x="118" y="259" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#53625B">You can accept or reject.</text>
+    <text x="118" y="284" text-anchor="middle" font-family="monospace" font-size="8" fill="#246B57">NO CHAT BEFORE APPROVAL</text>
+    <rect x="18" y="326" width="92" height="38" rx="7" fill="#F7F5EF" stroke="#246B57"/><text x="64" y="350" text-anchor="middle" font-family="Arial,sans-serif" font-size="11" fill="#246B57">Reject</text>
+    <rect x="119" y="326" width="99" height="38" rx="7" fill="#246B57"/><text x="169" y="350" text-anchor="middle" font-family="Arial,sans-serif" font-size="11" font-weight="700" fill="#FFFFFF">Accept ✓</text>
+    <path d="M7 378h222" stroke="#D8DDD2"/><text x="32" y="396" font-family="Arial,sans-serif" font-size="9" fill="#246B57">Help Others</text><text x="163" y="396" font-family="Arial,sans-serif" font-size="9" fill="#53625B">Profile</text>
+  </g>
+  <path d="M260 281c24-40 38-56 67-66" fill="none" stroke="#246B57" stroke-width="2" stroke-dasharray="3 6" stroke-linecap="round"/>
+  <circle cx="294" cy="245" r="18" fill="#F7F5EF" stroke="#A9C7B5"/><path d="m289 234 10 9-10 9v-18l10 9-14 12m4-3 10 9-10-9" fill="none" stroke="#246B57" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

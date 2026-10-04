@@ -13,3 +13,13 @@ key.properties
 *.apk
 *.aab
 **/captures/
+# Local release packaging, Apple signing, and test output.
+dist/
+**/__pycache__/
+*.pyc
+*.ipa
+*.p12
+*.p8
+*.mobileprovision
+*.xcarchive/
+*.xcresult/

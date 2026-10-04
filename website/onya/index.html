@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="No internet. A little help nearby. onya explores voluntary help through nearby Bluetooth peer-to-peer text chat.">
+  <meta name="theme-color" content="#F7F5EF">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>onya — A little help nearby.</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+  <script src="release-config.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to the story</a>
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="wordmark" href="#moment" aria-label="onya, back to the beginning">onya<span>.</span></a>
+      <nav aria-label="Main navigation">
+        <a href="#journey">The idea</a>
+        <a href="#simulation">Try the flow</a>
+        <a href="#engineering">Engineering</a><a href="#downloads">Get onya</a>
+        <a href="#evidence">Evidence <span aria-hidden="true">↗</span></a>
+      </nav>
+      <span class="header-note">A little closer.<br>A little kinder.</span>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero container" id="moment" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <p class="eyebrow"><span class="signal-dot" aria-hidden="true"></span> GOOD ON YOU FOR HELPING</p>
+        <h1 id="hero-title">No internet.<br>A little help<br><span class="soft-emphasis">nearby.</span></h1>
+        <p class="hero-description">For the moment campus Wi-Fi disappears, but the people around you haven’t. onya lets you ask a nearby volunteer for help through a local text chat.</p>
+        <div class="hero-actions">
+          <a class="button button-primary" href="#simulation">See how it works <span aria-hidden="true">↘</span></a>
+          <a class="text-link" href="#evidence">View the evidence <span aria-hidden="true">↗</span></a>
+        </div>
+        <p class="hero-footnote">Android ? Android. iPhone ? iPhone.<br>Nearby Bluetooth chat, with an explicit invitation.</p>
+      </div>
+      <figure class="hero-art">
+        <div class="art-heading"><span class="small-label">TWO PEOPLE. ONE SMALL CONNECTION.</span><span class="art-mark" aria-hidden="true">✳</span></div>
+        <img src="assets/hero-phones.svg" width="620" height="520" alt="Two illustrative onya phone screens: Alex requests a connection, and Jamie can accept or reject. Original portraits distinguish the requester and helper." fetchpriority="high">
+        <div class="art-message"><span class="tiny-avatar" aria-hidden="true">J</span><div><strong>Someone nearby can choose to help.</strong><span>That’s where the story starts.</span></div><span aria-hidden="true">↗</span></div>
+        <figcaption>Illustrative phone UI · not actual app screenshots</figcaption>
+      </figure>
+    </section>
+
+    <section class="origin-strip" aria-label="Our inspiration">
+      <div class="container origin-inner"><span class="small-label">A REAL EVERYDAY MOMENT</span><blockquote>“I sometimes lose campus Wi-Fi while working. When I need something, I’m stuck—even though people nearby may be able and willing to help.”</blockquote><span class="origin-signoff">The thought behind onya.</span></div>
+    </section>
+
+    <section class="section container" id="journey" aria-labelledby="journey-title">
+      <div class="section-heading"><div><p class="eyebrow">01 / THE HUMAN DECISION</p><h2 id="journey-title">Help begins<br>with a <span class="soft-emphasis">choice.</span></h2></div><p>The broader ambition is practical help. The app today makes the first connection: nearby people, a request, and an approved text conversation.</p></div>
+      <ol class="journey-steps">
+        <li><span class="step-number">01</span><h3>Someone is available.</h3><p>A helper chooses to make themselves discoverable to people nearby.</p></li>
+        <li><span class="step-number">02</span><h3>Someone reaches out.</h3><p>A requester discovers a helper and sends a connection request.</p></li>
+        <li><span class="step-number">03</span><h3>The helper decides.</h3><p>Accept or reject. Only after acceptance can the two people exchange text.</p></li>
+      </ol>
+      <p class="consent-note"><span aria-hidden="true">↳</span> A request is an invitation. <strong>It isn’t permission to start a chat.</strong></p>
+    </section>
+
+    <section class="simulation-section" id="simulation" aria-labelledby="simulation-title">
+      <div class="container">
+        <div class="section-heading"><div><p class="eyebrow">02 / WALK THROUGH THE CONNECTION</p><h2 id="simulation-title">Two phones.<br>One <span class="soft-emphasis">small ask.</span></h2></div><div><p>Follow the connection from discovery to a conversation. You get to make the helper’s decision.</p><p class="simulation-label"><span aria-hidden="true">◈</span> Illustrative simulation — no Bluetooth connection is made.</p></div></div>
+        <noscript><p class="noscript-note">JavaScript is disabled. The story still works: a helper is available → a requester discovers them → sends a request → the helper accepts or rejects → chat opens only after acceptance.</p></noscript>
+        <div class="simulation" data-state="available">
+          <div class="sim-progress" aria-label="Illustrated connection stages">
+            <ol><li class="current" data-step="available">Available</li><li data-step="discovered">Discovered</li><li data-step="requested">Requested</li><li data-step="accepted">Accepted</li><li data-step="chat">Chat</li></ol>
+            <button class="reset-button" id="reset-simulation" type="button">Reset <span aria-hidden="true">↺</span></button>
+          </div>
+          <div class="phones">
+            <article class="phone requester-phone" aria-labelledby="requester-label">
+              <div class="phone-top"><span>onya</span><span class="phone-notch" aria-hidden="true"></span><span class="phone-symbol" aria-hidden="true">⌁</span></div>
+              <div class="phone-screen">
+                <p class="phone-role" id="requester-label">REQUESTER · ALEX</p>
+                <div class="phone-title-row"><h3 id="requester-title">A little help?</h3><span class="avatar avatar-peach" aria-hidden="true">A</span></div>
+                <p class="phone-subtitle" id="requester-subtitle">Find someone nearby who’s open to helping.</p>
+                <div class="phone-panel" id="requester-panel">
+                  <div class="radar" aria-hidden="true"><span></span><span></span><span></span><b>⌁</b></div>
+                  <p class="panel-heading">Start with someone nearby.</p><p class="panel-description">Jamie has chosen to be available.</p>
+                </div>
+                <div class="chat-messages" id="requester-chat" hidden aria-label="Illustrative chat on Alex's phone"></div>
+                <div class="phone-bottom"><span class="phone-nav-active">Nearby</span><span>Profile</span></div>
+              </div>
+            </article>
+            <div class="connection-space" aria-hidden="true"><span class="connection-line"></span><span class="connection-icon">⌁</span><span class="connection-line"></span><span class="connection-caption">NEARBY<br>BY CHOICE</span></div>
+            <article class="phone helper-phone" aria-labelledby="helper-label">
+              <div class="phone-top"><span>onya</span><span class="phone-notch" aria-hidden="true"></span><span class="phone-symbol" aria-hidden="true">⌁</span></div>
+              <div class="phone-screen">
+                <p class="phone-role" id="helper-label">HELPER · JAMIE</p>
+                <div class="phone-title-row"><h3 id="helper-title">Open to helping.</h3><span class="avatar avatar-sage" aria-hidden="true">J</span></div>
+                <p class="phone-subtitle" id="helper-subtitle">You choose when to connect.</p>
+                <div class="phone-panel helper-panel" id="helper-panel"><div class="availability-orbit" aria-hidden="true"><span>✓</span></div><p class="panel-heading">Help Others is on.</p><p class="panel-description">Available to people nearby.<br>No conversation has started.</p><span class="availability-pill"><span class="signal-dot" aria-hidden="true"></span> Available</span></div>
+                <div class="chat-messages" id="helper-chat" hidden aria-label="Illustrative chat on Jamie's phone"></div>
+                <div class="phone-bottom"><span class="phone-nav-active">Help Others</span><span>Profile</span></div>
+              </div>
+            </article>
+          </div>
+          <div class="sim-controls">
+            <div class="sim-narration"><span class="small-label" id="sim-step-label">STEP 01 / AVAILABLE</span><p id="sim-status" role="status" aria-live="polite" aria-atomic="true">Jamie is available. Alex can look for a nearby helper.</p></div>
+            <div class="sim-buttons" id="sim-buttons"><button class="button button-primary" type="button" id="discover-button">Find a nearby helper <span aria-hidden="true">→</span></button><button class="button button-primary" type="button" id="request-button" hidden>Request a connection <span aria-hidden="true">→</span></button><button class="button button-outline" type="button" id="reject-button" hidden>Reject request</button><button class="button button-primary" type="button" id="accept-button" hidden>Accept request <span aria-hidden="true">✓</span></button><button class="button button-primary" type="button" id="chat-button" hidden>Show the example chat <span aria-hidden="true">→</span></button><button class="button button-outline" type="button" id="restart-button" hidden>Try again <span aria-hidden="true">↺</span></button></div>
+          </div>
+          <p class="example-note">Alex and Jamie are fictional. This is an explanation of the flow, not a recorded app demonstration.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section container engineering-section" id="engineering" aria-labelledby="engineering-title">
+      <div class="section-heading"><div><p class="eyebrow">03 / THE ENGINEERING</p><h2 id="engineering-title">A local path.<br>No internet detour.</h2></div><p>Two platform builds preserve their working flows. Flutter handles the UI; Kotlin/Android BLE and Swift/CoreBluetooth handle nearby messages. Use two Android phones or two iPhones.</p></div>
+      <div class="transport-diagram" role="img" aria-label="Requester phone sends bounded message frames directly over Bluetooth Low Energy to a nearby helper phone. No Internet access is provided."><div class="diagram-device"><span aria-hidden="true">▯</span><strong>Requester</strong><small>Flutter + native BLE</small></div><div class="diagram-path"><span class="small-label">BLUETOOTH LOW ENERGY</span><div class="packet-path" aria-hidden="true"><span></span><i></i><i></i><i></i><span></span></div><p>Direct, nearby text exchange</p></div><div class="diagram-device"><span aria-hidden="true">▯</span><strong>Helper</strong><small>Flutter + native BLE</small></div></div>
+      <div class="engineering-notes"><p><strong>Small messages, clear boundaries.</strong> The shared message envelope has a 256-byte limit. The native adapters frame the bytes for BLE and use acknowledgements for transfer handling.</p><p><strong>Availability on Android.</strong> A foreground service supports helper availability and request notifications while the UI is detached. A separate iOS helper implementation uses CoreBluetooth background availability and local request notifications; operating-system limits still apply.</p></div>
+      <p class="scope-note"><strong>Both nearby people need onya installed beforehand.</strong> This connection does not give the requester Internet access. Automatic ordering, ride booking, Internet relay and a structured task system are not implemented. Android–iPhone interoperability has not been verified.</p>
+    </section>
+
+    <section class="security-section" id="security" aria-labelledby="security-title">
+      <div class="container">
+        <div class="section-heading"><div><p class="eyebrow">04 / CLEAR BOUNDARIES</p><h2 id="security-title">A request is a choice.<br>A chat is a session.</h2></div><p>Both mobile flows require the helper to accept a request. Security capabilities differ between the preserved platform builds.</p></div>
+        <div class="security-columns">
+          <article><span class="security-number">01 / ANDROID</span><h3>Automatic<br>encrypted chat.</h3><p>Ephemeral X25519 keys, HKDF and AES-GCM protect chat and End Chat messages. No verification codes. Peer identity is not authenticated; active impersonation remains possible.</p></article>
+          <article><span class="security-number">02 / IPHONE</span><h3>Existing<br>iPhone chat.</h3><p>The validated iOS baseline exchanges plaintext application envelopes over BLE. Application-layer encryption is not implemented there; Bluetooth link protection is unverified. Use non-sensitive demo messages.</p></article>
+          <article><span class="security-number">03 / ENDING A CHAT</span><h3>Disconnect.<br>Start fresh.</h3><p>Android has End Chat and local, in-memory Report. On iPhone, the chat back button closes the connection and returns to Nearby. Neither app relays messages through a central server.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section container evidence-section" id="evidence" aria-labelledby="evidence-title">
+      <div class="section-heading"><div><p class="eyebrow">05 / EVIDENCE</p><h2 id="evidence-title">Working baselines.<br>Honest limits.</h2></div><p>Prior physical-device results and final integration verification have different scopes. A successful build does not establish radio behavior.</p></div>
+      <div class="engineering-notes"><p><strong>Android ? Android.</strong> The team previously validated encrypted chat and helper notifications on Android. The integration preserves that application and native transport.</p><p><strong>iPhone ? iPhone.</strong> The iOS branch records team-reported discovery, acceptance, bidirectional chat and helper notification tests. It is preserved as a separate iOS build target.</p></div>
+      <p class="scope-note">The relocated iOS target still requires Mac/Xcode compilation and a final two-iPhone regression run. Cross-platform phone communication is outside the submission scope. <a href="evidence.html">Read sources and validation limits ?</a></p>
+    </section>
+
+    <section class="close-section" id="status" aria-labelledby="close-title">
+      <div class="container close-layout"><div><p class="eyebrow">GOOD ON YA. THAT’S THE IDEA.</p><h2 id="close-title">Someone nearby<br>can choose to make<br>your day <span class="soft-emphasis">easier.</span></h2><p>onya is inspired by “good on ya”—recognizing the person who chooses to help. A little connection can be a good place to start.</p><a class="button button-primary" href="https://github.com/Laxmi-Srinivas/Offline-relay">Explore the project <span aria-hidden="true">↗</span></a></div><aside class="current-status" aria-labelledby="status-title"><span class="small-label">CURRENT STATUS</span><h3 id="status-title">Built. Checked.<br>Still learning.</h3><dl><div><dt><span class="status-dot built" aria-hidden="true"></span> Implemented</dt><dd>Nearby BLE chat, requests and approval. Android helper availability and notifications.</dd></div><div><dt><span class="status-dot tested" aria-hidden="true"></span> Tested locally</dt><dd>Shared Flutter checks, earlier Android policy tests and debug APK build—each with recorded scope.</dd></div><div><dt><span class="status-dot pending" aria-hidden="true"></span> Pending</dt><dd>Final Mac/Xcode and two-iPhone checks, public app distribution and hosted-site verification.</dd></div></dl><a class="text-link" href="#evidence">See the evidence <span aria-hidden="true">↑</span></a></aside></div>
+      <div class="container distribution-status" id="downloads" aria-label="App access and platform status">
+        <div class="platform-picker" hidden>
+          <div><span class="small-label">GET ONYA</span><h3>Choose your phone.</h3></div>
+          <div class="platform-options" role="group" aria-label="Choose your phone platform">
+            <button class="button button-primary" type="button" id="choose-android" aria-pressed="true" aria-controls="android-access">Android</button>
+            <button class="button button-outline" type="button" id="choose-ios" aria-pressed="false" aria-controls="ios-access">iPhone / iOS</button>
+          </div>
+        </div>
+        <article id="android-access"><span class="small-label">ANDROID BETA</span><h3 id="android-download-status">Android download being prepared.</h3><p id="android-version">The actual beta version will be shown with its published APK.</p><p id="android-source" hidden></p><a class="button button-primary" id="android-download" hidden>Download Android APK <span aria-hidden="true">↗</span></a><p class="distribution-note">When available, download the linked GitHub Release APK, open it on Android and allow installation from that browser or file manager if prompted. Enable Bluetooth and grant Nearby Devices permissions. Both nearby people need the app installed beforehand. This is a beta, not a production release.</p></article>
+        <article id="ios-access"><span class="small-label">IPHONE</span><h3 id="ios-download-status">iOS public download not available yet.</h3><a class="button button-primary" id="ios-download" hidden>Install on iPhone ?</a><p>The app has been built and tested on physical iPhones with free Xcode Personal Team signing <span class="inline-attribution">(team-reported)</span>.</p><a class="button button-outline" id="iphone-demo" hidden>Watch iPhone demo <span aria-hidden="true">↗</span></a><p class="distribution-note">Until TestFlight or App Store distribution is configured, a developer must build <code>apps/offline_relay_ios</code> on a Mac with Xcode and sign it for each iPhone. An arbitrary IPA download is not an installation route. <a href="evidence.html">Build and validation scope</a>.</p></article>
+      </div>
+    </section>
+  </main>
+  <footer class="site-footer"><div class="container footer-inner"><a class="wordmark" href="#moment" aria-label="onya, back to the beginning">onya<span>.</span></a><p>A little help nearby.</p><div><a href="evidence.html">Evidence sources</a><a href="https://github.com/Laxmi-Srinivas/Offline-relay">GitHub <span aria-hidden="true">↗</span></a></div><span class="footer-note">A project presentation. No tracking.</span></div></footer>
+</body>
+</html>
