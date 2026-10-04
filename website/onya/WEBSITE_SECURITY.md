@@ -1,7 +1,8 @@
 # Website security and deployment boundaries
 
-Scope: the static Onya presentation on `feat/onya-presentation`, including the
-Android/iOS selector at `44026ff`. This review does not verify mobile security.
+Scope: the static Onya presentation on `integration/final-hackathon`.
+This website review does not establish mobile security. Android encrypts chat
+without authenticating peer identity; iOS application envelopes remain plaintext.
 
 The visitor can click navigation, choose a platform and operate a fictional chat
 simulation. No text-entry fields, forms, accounts, backend, API calls, analytics
@@ -23,17 +24,19 @@ supplied; neither download was verified or advertised as available.
 
 Deployment checks an allowlisted ZIP, not the repository root. Current output
 contains 19 public static files, with no mobile source, tooling, Git metadata,
-APKs, IPAs or signing keystores. The workflow runs only on the website branch,
+APKs, IPAs or signing keystores. The workflow runs only on the integration branch,
 does not persist checkout credentials, and grants Pages/OIDC write permissions
 only to the deployment job. Branch-limited environment policy requires owner setup.
 
 Limits: CSP is defense in depth, not protection from a compromised repository or
 approved deployment. Meta CSP cannot enforce `frame-ancestors`; custom response
 headers have not been configured or claimed. Published HTTPS behavior, headers
-and logged-out links remain unchecked because Pages is not enabled. Keep signing
+and logged-out links remain unchecked: Pages is configured, but the public URL returns 404. Keep signing
 keys out of this public repository. Real APK assets require a separate release
 review and anonymous download check before enabling their link.
 
-Actual checks: six local static groups and 27 Chrome browser checks passed;
-GitHub Actions static checks and packaging passed. Deployment stopped at Pages
-setup, HTTP 404. See DEPLOYMENT.md and VERIFICATION.md for evidence and limits.
+Current checks: six local static groups and 27 Chrome browser checks passed.
+Tracked text was scanned for common secrets/signing settings; none were found.
+This is not an exhaustive audit of repository history. An earlier GitHub Actions
+run stopped at Pages setup. No current deployment was performed. See DEPLOYMENT.md
+and VERIFICATION.md for exact scope and remaining owner steps.

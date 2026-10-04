@@ -9,7 +9,7 @@ Bluetooth, backend, database, tracking, remote font or external API.
 
 From this folder:
 
-```powershell
+```sh
 python preview.py
 ```
 
@@ -29,16 +29,17 @@ copies are available beside them. No service worker/cache is required.
 - [Three-minute script and pre-demo checklist](presentation/RUNBOOK.md)
 - [Devpost draft and submission checklist](presentation/DEVPOST.md)
 - [Verification results, commands and limitations](VERIFICATION.md)
-- [Deployment proposal, awaiting approval](DEPLOYMENT.md)
+- [Deployment and installation steps](DEPLOYMENT.md)
 - [Source hashes and commits](evidence/sources.json)
 - [Devpost cover, 1200 × 800 PNG](assets/devpost-cover.png): project illustration,
   not an app screenshot. Editable source: `presentation/cover.html` / `cover.css`.
 
-Deployment target: free GitHub Pages, with only allowlisted website output uploaded
-by `.github/workflows/onya-pages.yml`. Initial push/publication awaits approval.
-Android shows a preparation notice; no APK URL/version was supplied. iOS public
-download is unavailable. Physical iPhone app testing is team-reported and separate
-from our pending native Security verification.
+Deployment target: GitHub Pages. The workflow packages only public website files
+and publishes reviewed website changes pushed to `integration/final-hackathon`.
+No publication was performed during this verification. Pages is configured, but
+the expected public URL currently returns 404. See DEPLOYMENT.md before pushing.
+Android APK hosting and public iOS distribution remain pending; the buttons stay
+hidden until verified real assets are configured.
 
 When actual approved assets arrive, edit only `release-config.js`: the Android URL
 must be a specific .apk asset under this repository's GitHub Release, with its
@@ -48,8 +49,8 @@ update the current-placeholder tests before publishing that later change.
 
 ## Package the finished site
 
-```powershell
-python package_site.py --output C:/Users/mamid/AppData/Local/Temp/Onya-presentation.zip
+```sh
+python package_site.py --output /tmp/onya-presentation.zip
 ```
 
 The ZIP places index.html at its root and includes only allowlisted public static
@@ -61,8 +62,8 @@ locally with `python -m http.server 4173 --bind 127.0.0.1`.
 
 From the repository worktree root:
 
-```powershell
-python website/onya/tests/browser_check.py --browser "C:/Program Files/Google/Chrome/Application/chrome.exe" --output C:/Users/mamid/AppData/Local/Temp/Onya-preview-checks
+```sh
+python website/onya/tests/browser_check.py --browser "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --output /tmp/onya-preview-checks
 ```
 
 Python standard library only; requires an installed Chromium browser. Runs an
@@ -72,16 +73,15 @@ Its cover screenshot can be copied to assets/devpost-cover.png after inspection.
 
 ## Git and evidence boundary
 
-Branch: `feat/onya-presentation`. Base: origin/main
-`67acd0632eb1965482d7b745e06f1ef0c83b55f5`. Separate worktree; files confined to
-`website/onya/`. No mobile files changed, no merge, no history rewrite. No publication
-or website-branch push is authorized until the user approves the finished preview.
+Final integration branch: `integration/final-hackathon`, checkpoint `6b0f865`.
+Android and iOS use separate app targets and protocol packages. Android has
+application-layer encryption; the preserved iOS baseline has plaintext envelopes.
+Only same-platform phone pairs are supported. Current results and remaining device
+steps are in [the integration record](../../docs/testing/final-integration.md).
 
-Evidence is copied byte-for-byte from Security commit
-`3f9eaf5574bae806fd20265fa40a0ce4e3b0b252` with source paths and SHA-256 hashes.
-The website verifies those records, not mobile runtime behavior. No invented test
-dates. Shared Flutter results, prior Android APK results and pending iOS/device
-checks are separate. Security and newer upstream UI are not assumed integrated.
+Historical evidence copies remain byte-for-byte pinned to Security commit
+`3f9eaf5574bae806fd20265fa40a0ce4e3b0b252`. Those reports are explicitly labelled
+historical and do not describe the current Android encryption implementation.
 
 Simulation state: available → discovered → requested → accepted → chat, or
 requested → rejected. Out-of-order actions are ignored. Reset clears mock history.

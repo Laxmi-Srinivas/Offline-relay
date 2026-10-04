@@ -134,7 +134,7 @@ packages:
   relay_transport:
     dependency: "direct main"
     description:
-      path: "../../packages/relay_transport"
+      path: "../../packages/relay_transport_ios"
       relative: true
     source: path
     version: "0.0.1"

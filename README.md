@@ -5,7 +5,7 @@ chooses to be available, a requester discovers them, and the helper accepts or
 rejects. Messages travel directly between phones without a central chat server.
 Both people must install the app before going offline.
 
-**Hackathon scope: Android ? Android and iPhone ? iPhone only.** Android ? iPhone
+**Hackathon scope: Android ↔ Android and iPhone ↔ iPhone only.** Android ↔ iPhone
 communication is excluded. The repository retains its historical OfflineRelay
 name and technical identifiers.
 
@@ -33,8 +33,8 @@ prototype, not a production-secure messenger.
 
 ## How it works
 
-Profile ? Help Others / Find nearby ? discovery ? BLE connection ? request ?
-explicit acceptance ? bidirectional text chat ? end/disconnect. Android also
+Profile → Help Others / Find nearby → discovery → BLE connection → request →
+explicit acceptance → bidirectional text chat → end/disconnect. Android also
 establishes fresh encryption keys automatically after acceptance, with no manual
 code verification. A new connection starts a new session. Neither platform
 provides Internet access, automatic reconnect or central moderation.
@@ -86,6 +86,7 @@ Foundation-only native fixtures on the Mac, from the iOS app directory:
 ```sh
 xcrun swiftc ios/Runner/BleFraming.swift ios/Runner/BleMessageReceiver.swift \
   ios/Runner/BleProfile.swift ios/Runner/BleHelperState.swift \
+  ios/Runner/BleCentralConnections.swift \
   test/native/main.swift -o /tmp/onya-ios-tests
 /tmp/onya-ios-tests
 ```
@@ -104,7 +105,8 @@ python website/onya/package_site.py --output dist/onya-site.zip
 Preview at the local address printed by the script. Deploy only the packaged
 contents. [Deployment instructions](website/onya/DEPLOYMENT.md) cover GitHub
 Pages and app hosting. The prepared Pages workflow publishes reviewed website
-changes from main; this integration branch does not deploy anything.
+changes from `integration/final-hackathon` after an authorized push. No deployment
+was performed during this verification; the current public URL returns 404.
 
 Android: publish the verified APK as a GitHub Release asset, then fill its real
 URL, version and source commit in `website/onya/release-config.js`. No public APK
@@ -119,8 +121,8 @@ Use **two phones of the same platform**, running the same platform build.
 1. Open onya on both phones; enter different names in Profile.
 2. On B, enable Help Others. On A, choose Find Users Nearby.
 3. A selects B and requests a connection; B accepts.
-4. On Android, wait for automatic secure setup. Send two short messages A ? B
-   and two B ? A. Confirm display on both phones.
+4. On Android, wait for automatic secure setup. Send two short messages A → B
+   and two B → A. Confirm display on both phones.
 5. End chat: Android **End**; iPhone **back arrow**. Confirm peer disconnection.
 6. Start a fresh session, reverse requester/helper roles and repeat.
 7. Close/reopen the apps and start a new connection. Demonstrate background helper
@@ -133,7 +135,7 @@ depends on the OS. There is no automatic reconnection guarantee.
 ## Verification and provenance
 
 [Final integration record](docs/testing/final-integration.md) distinguishes
-checks performed here from prior team-reported device results and remaining Mac
+checks performed here from prior team-reported device results and remaining device/distribution
 work. See [architecture](docs/architecture/overview.md),
 [Android encryption](docs/security/e2e-chat.md) and
 [iPhone baseline validation](docs/testing/ios-phase-one-ui.md).

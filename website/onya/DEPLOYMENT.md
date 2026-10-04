@@ -1,80 +1,80 @@
-# GitHub Pages deployment — authorized, awaiting owner setup
+# Final integration deployment and app distribution
 
-The user selected GitHub Pages with a free github.io URL and subsequently requested
-deployment. The verified website was pushed on `feat/onya-presentation` at
-`44026ff94b3f291ecf4ca1144c17c2966765e8f9`. It is not live: Pages is not enabled.
-Workflow: `.github/workflows/onya-pages.yml`; source branch:
-`feat/onya-presentation`. No domain purchase, mobile-branch change, merge or rewrite.
+Source: `integration/final-hackathon`. The website remains static, with no backend.
+This verification prepared deployment; it did not publish or change GitHub settings.
 
-## Prepared deployment
+## Current status
 
-The workflow triggers only on website/deployment changes pushed to the website
-branch. It checks static assets/evidence, packages an allowlisted ZIP, extracts it
-under the runner's TEMP directory and uploads only that output. It never publishes
-the repository root or mobile source. Build has read permissions; only deploy has
-Pages write/OIDC permissions. Checkout does not persist credentials. No backend,
-cloud secrets, database or npm installation steps.
+Read-only checks on 2026-10-04 found Pages configured with `build_type=workflow`,
+but `https://laxmi-srinivas.github.io/Offline-relay/` returned HTTP 404. No GitHub
+Release assets are available. No TestFlight/App Store URL is configured.
+The earlier [workflow attempt](https://github.com/Laxmi-Srinivas/Offline-relay/actions/runs/37209493790)
+on `feat/onya-presentation` passed packaging but failed Pages configuration.
+That historical failure is not a current successful deployment.
 
-## Actual first deployment attempt
+## Publish the website when approved
 
-[Run 37209493790](https://github.com/Laxmi-Srinivas/Offline-relay/actions/runs/37209493790)
-passed checkout, static checks and packaging on GitHub's runner. Configure Pages
-failed with HTTP 404: the repository has no Pages site. Upload and deploy were
-skipped. Anonymous requests to the expected project URL returned HTTP 404.
-The authenticated account has push access but not admin/maintain access. No
-repository settings were changed. The user will ask the owner to enable Pages.
+1. Review the local page, final scope and download notices.
+2. An owner checks Settings → Pages → Source: GitHub Actions, and the
+   `github-pages` environment permits `integration/final-hackathon`. If another
+   site is present, confirm replacement before proceeding.
+3. Push reviewed website/workflow changes to `integration/final-hackathon`.
+   **This push triggers publication**, once repository settings permit it.
+   No main checkout, merge or push is required. The workflow also declares manual
+   dispatch; its availability depends on GitHub's default-branch workflow rules.
+4. Inspect the actual workflow result and `deploy-pages` URL. Do not advertise
+   the expected URL as live until it returns the reviewed site.
+5. While signed out, check assets, platform selector, accept/reject/reset, mobile
+   layout, `/Offline-relay/` subpath and any configured download links.
 
-Owner action: Settings → Pages → Build and deployment → Source → GitHub Actions.
-If needed, Settings → Environments → github-pages must permit
-`feat/onya-presentation`. Rerun the failed workflow after setup; do not edit main.
-The local preview and ZIP remain available while deployment is blocked.
+The workflow runs static checks and packages only public files from `website/onya`.
+It uploads extracted ZIP contents, never the repository root. Checkout credentials
+are not persisted. Only the deploy job gets Pages write/OIDC permissions. No mobile
+build or signing credentials enter this workflow. Repository settings and actual
+hosted HTTPS behavior are still manual verification steps.
 
-## Publication sequence
+Reference: [GitHub custom Pages workflows](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages).
 
-1. Confirm the approved website commit and inspect the finished preview.
-2. With repository-admin access, set Settings → Pages → Source to GitHub Actions.
-   Check the `github-pages` environment permits only `feat/onya-presentation`.
-   If a Pages site already exists, confirm replacement is intended before changing it.
-3. Push only the website branch. That push triggers publication if settings permit
-   it. Later website-branch pushes also redeploy; treat each as publication.
-4. Inspect build/deploy logs and the actual URL returned by deploy-pages. Expected
-   project URL: `https://laxmi-srinivas.github.io/Offline-relay/`; it is not claimed
-   live or verified until deployment succeeds.
-5. Check hosted assets, accept/reject/reset, mobile layout, evidence links, project
-   subpath, download placeholders and actual HTTPS behavior.
-6. Add the actual approved URL to Devpost after checking it. Keep the identical ZIP
-   locally for offline fallback.
+## Android installation and APK hosting
 
-[GitHub's custom Pages workflow guide](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages)
-describes the official configure/upload/deploy actions used here. GitHub workflow
-execution has been checked through packaging; successful deployment and final
-environment settings remain unverified. The first trigger
-uses push: manual workflow dispatch generally needs its definition on the default
-branch, and this work must not modify main to enable that.
+Use an Android SDK/JDK host; this Mac currently has no Android SDK. From
+`apps/offline_relay`, run `flutter pub get`, `flutter analyze`, `flutter test`,
+then `flutter build apk --debug`. The artifact is
+`build/app/outputs/flutter-apk/app-debug.apk`. Do not commit it. Record
+`git rev-parse HEAD` and the artifact's SHA-256. Install that same artifact on both
+Android demo devices, for example `adb -s SERIAL install -r PATH_TO_APK`.
 
-## App access
+For public download, upload the verified APK as a GitHub Release asset when
+publication is approved. Copy its actual URL into `release-config.js`, together
+with the APK version and full source commit. Check anonymous download and hash
+before enabling the button. Update the placeholder assertions in the static test
+when configuring real releases. No URL is fabricated here. The existing release
+build configuration also uses debug signing; neither build is production signing.
 
-Android shows “Android download being prepared.” No download anchor appears until
-the user supplies the actual published APK/version/source commit in release-config.js. It must
-target this repository's specific GitHub Release .apk asset. Verify the asset and
-update placeholder tests before publishing later changes. Beta is not production.
+## iPhone installation and distribution
 
-iOS shows “iOS public download not available yet.” Existing physical app testing
-and free Personal Team signing are team-reported; prepared Security fixes have
-separate pending checks. A “Watch iPhone demo” link appears only when a real approved
-HTTPS recording is supplied. No App Store, TestFlight or IPA buttons.
+The separate app compiles for simulator and unsigned device release. For the demo,
+open `apps/offline_relay_ios/ios/Runner.xcworkspace` on a Mac, choose a local signing
+team, and sign/install on each iPhone. Trust/Developer Mode may be required. Keep
+team identifiers, certificates and provisioning files out of commits.
 
-## Website protection and limits
+Public distribution requires the project's Apple Developer/App Store Connect
+setup, a signed archive/upload and an actual TestFlight or App Store release.
+External TestFlight testing may require Apple's beta review. Configure only the
+real published Apple URL in `release-config.js` and verify it before advertising.
+An unsigned Runner.app or arbitrary IPA URL does not install an iPhone app.
+See [Apple's TestFlight overview](https://developer.apple.com/help/app-store-connect/test-a-beta-version/testflight-overview/).
 
-HTML has a restrictive meta CSP: local scripts/assets only, no API connections,
-object embedding or forms. No user input/persistence; mock chat/version uses
-textContent. Release links require HTTPS. GitHub Pages does not apply Cloudflare
-_headers files; the earlier draft was removed. Frame-ancestor policy cannot be
-enforced through meta CSP, and custom hosting headers are not claimed configured.
-Inspect actual hosting behavior/headers after approved deployment.
+## Offline fallback
 
-## Rollback
+From the repository root:
 
-Retain the previous approved ZIP/commit. Use the local copy if hosting fails.
-Fix forward on the website branch and redeploy approved output. Do not rewrite
-history or change mobile branches. Local success is not a guarantee of zero errors.
+```sh
+python3 website/onya/tests/static_check.py
+python3 website/onya/package_site.py --output /tmp/onya-site.zip
+python3 website/onya/preview.py
+```
+
+Extract the ZIP for a local presentation fallback. GitHub links still need Internet;
+local fonts, illustration, simulation and historical reports work offline. Meta CSP
+restricts local resources; custom HTTP security headers are not claimed configured.

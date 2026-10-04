@@ -1,10 +1,11 @@
 name: Publish onya website
 
-# Integration preparation does not publish. Deploy after the reviewed main merge.
+# A push of reviewed website changes to the integration branch publishes the site.
+# Repository Pages/environment setup is required; no main merge is needed.
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [integration/final-hackathon]
     paths:
       - website/onya/**
       - .github/workflows/onya-pages.yml
@@ -18,7 +19,7 @@ concurrency:
 
 jobs:
   build:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/integration/final-hackathon'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -44,7 +45,7 @@ jobs:
           path: ${{ runner.temp }}/onya-site
 
   deploy:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/integration/final-hackathon'
     needs: build
     runs-on: ubuntu-latest
     permissions:

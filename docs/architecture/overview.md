@@ -1,6 +1,6 @@
 # onya hackathon architecture
 
-Supported paths: Android ? Android and iPhone ? iPhone. Cross-platform phone
+Supported paths: Android ↔ Android and iPhone ↔ iPhone. Cross-platform phone
 communication is excluded. The website provides installation guidance; it does
 not connect to BLE or relay chat.
 

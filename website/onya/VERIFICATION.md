@@ -1,3 +1,20 @@
+# Current integration verification
+
+For `integration/final-hackathon`, the Mac verification passed six static groups,
+27 Chrome browser checks, JavaScript syntax checks and allowlisted ZIP packaging.
+Responsive checks cover 320–1440px, keyboard flow, offline fallback and project
+subpath. Both Flutter apps and the relocated native iOS build were checked:
+[exact results](../../docs/testing/final-integration.md).
+
+Pages is now configured for Actions but its expected URL returned 404; no new
+publication occurred. No APK asset or public iOS URL is configured. The current
+workflow targets the integration branch. See [current deployment steps](DEPLOYMENT.md).
+
+The following is the previous website session's historical record. Its branch,
+publication status, mobile test counts and pending Mac work are superseded above.
+
+---
+
 # Website verification and handoff
 
 ## Source and publication boundary
@@ -28,13 +45,13 @@ Website publication and branch push: NOT PERFORMED, awaiting final preview appro
 - Original desktop/mobile hero and simulation screenshots visually inspected.
   Generated Devpost cover is a labelled project illustration, not app evidence.
 
-Exact commands, run from website worktree root:
+Reproduction commands from the website worktree root (output paths generalized):
 
 ```powershell
 python website/onya/tests/static_check.py
-python website/onya/tests/browser_check.py --browser "C:/Program Files/Google/Chrome/Application/chrome.exe" --output C:/Users/mamid/AppData/Local/Temp/Onya-preview-checks
-python website/onya/tests/browser_check.py --browser "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe" --output C:/Users/mamid/AppData/Local/Temp/Onya-edge-checks
-python website/onya/package_site.py --output C:/Users/mamid/AppData/Local/Temp/Onya-presentation.zip
+python website/onya/tests/browser_check.py --browser "C:/Program Files/Google/Chrome/Application/chrome.exe" --output /tmp/Onya-preview-checks
+python website/onya/tests/browser_check.py --browser "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe" --output /tmp/Onya-edge-checks
+python website/onya/package_site.py --output /tmp/Onya-presentation.zip
 ```
 
 Native installed browsers, temporary test profiles and ephemeral localhost servers;
