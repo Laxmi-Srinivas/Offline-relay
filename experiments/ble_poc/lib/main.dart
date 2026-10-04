@@ -42,7 +42,7 @@ class _BleDiagnosticsState extends State<BleDiagnostics> {
     } on PlatformException catch (error) {
       _log('${error.code}: ${error.message}');
     } on MissingPluginException {
-      _log('unsupported: Android implementation only');
+      _log('unsupported: native BLE implementation unavailable');
     }
   }
 
@@ -60,8 +60,8 @@ class _BleDiagnosticsState extends State<BleDiagnostics> {
         const Padding(
           padding: EdgeInsets.all(8),
           child: Text(
-            'Android 12+ • foreground only • unverified on devices\n'
-            'B: Advertise. A: Discover. One pair at a time.\n'
+            'Android 12+ / iOS central • foreground only\n'
+            'Android B: Advertise. iOS/Android A: Discover. One pair.\n'
             'Grant permission, then press the role button again.',
           ),
         ),

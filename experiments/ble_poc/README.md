@@ -95,3 +95,45 @@ and actual device results remain outstanding. Follow the full negative-case
 API references: [Android GATT callbacks](https://developer.android.com/reference/android/bluetooth/BluetoothGattCallback),
 [GATT server](https://developer.android.com/reference/android/bluetooth/BluetoothGattServer),
 [permissions](https://developer.android.com/develop/connectivity/bluetooth/bt-permissions).
+
+## iOS central POC
+
+The experimental iOS host uses native CoreBluetooth and the exact Android wire
+format above. No BLE plugin or product-host dependency is added. iOS peripheral
+advertising is not implemented; **Advertise** returns `unsupported_role` on iOS.
+
+Build: `flutter build ios --simulator --debug` from this directory. A simulator
+build checks compilation only. For hardware, open `ios/Runner.xcworkspace`, select
+the Runner target and a valid signing Team, connect and trust an iPhone, enable
+Developer Mode if requested, and run on that device. The POC bundle identifier is
+`dev.offlinerelay.experiments.blePoc`; provisioning must cover that identifier.
+
+On a validated Android phone, start **Advertise**. On iPhone, grant Bluetooth
+access, press **Discover + connect**, and wait for `central_ready`. Send Hello,
+wait for `acknowledgement_received`, then send 256 bytes and wait for its ACK.
+Require matching Android `message_received ... exact_payload_verified=true`
+logs and iPhone ACK IDs/lengths. Stop and repeat. Keep both apps in the foreground
+and only one pair in range. No iPhone physical success has been established.
+
+The iOS central has 15-second scan, connection, service/characteristic discovery,
+and combined message-write/ACK deadlines, plus a bounded Bluetooth-readiness
+wait. It sends one frame per successful `.withResponse` callback, then reads ACK
+once. It does not request larger frames, subscribe, retry, or reconnect. Stop,
+background entry, errors, and radio loss detach delegates and cancel pending
+operations. Each restart uses a fresh session/manager; timer generation checks
+prevent cancelled deadlines from affecting later stages.
+
+Timestamped diagnostics go to the Flutter log viewer and `NSLog` with the
+`OfflineRelayBLE` prefix. Use Xcode's device console to preserve logs. A local
+`disconnect_requested` or stopped log does not claim a confirmed radio disconnect.
+
+Focused native byte tests run the actual Swift framing helper on macOS:
+
+```sh
+xcrun swiftc ios/Runner/BleProtocol.swift test/native/main.swift -o /tmp/offlinerelay-protocol-tests
+/tmp/offlinerelay-protocol-tests
+```
+
+These tests check byte vectors and framing, not CoreBluetooth delivery or timeout
+behavior. Physical permission, missing-peer, missing-ACK, interrupted-transfer,
+and radio-off checks remain required.

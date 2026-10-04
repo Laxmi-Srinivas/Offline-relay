@@ -1,5 +1,5 @@
 name: ble_poc
-description: Disposable Android foreground GATT experiment.
+description: Disposable Android and iOS central foreground GATT experiment.
 publish_to: none
 version: 0.0.1+1
 environment:
