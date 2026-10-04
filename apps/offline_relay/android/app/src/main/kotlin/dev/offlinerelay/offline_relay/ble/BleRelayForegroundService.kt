@@ -52,6 +52,13 @@ class BleRelayForegroundService : Service() {
     private var acceptedPeerName: String? = null
     private var availabilityEnabled = false
     private var stopping = false
+    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var requestTimeout: Runnable? = null
+
+    private fun clearRequestTimeout() {
+        requestTimeout?.let(handler::removeCallbacks)
+        requestTimeout = null
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -60,13 +67,21 @@ class BleRelayForegroundService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         isRunning = true
-        startForeground(ONGOING_NOTIFICATION_ID, ongoingNotification())
+        try {
+            startForeground(ONGOING_NOTIFICATION_ID, ongoingNotification())
+        } catch (error: Exception) {
+            availabilityEnabled = false
+            emit(mapOf("event" to "error", "message" to "Helper service could not start. Check Nearby devices and notification permissions, then retry."))
+            notifyState()
+            stopSelf()
+        }
         return START_NOT_STICKY
     }
 
     override fun onBind(intent: Intent?): IBinder = binder
 
     fun attach(listener: (Map<String, Any?>) -> Unit) {
+        if (eventListener === listener) return
         eventListener = listener
         listener(helperStateEvent())
         val connectionId = activeConnectionId
@@ -86,15 +101,25 @@ class BleRelayForegroundService : Service() {
                 ))
             }
         }
-        queuedEvents.forEach(listener)
+        // Snapshot replaces historical connection/request events; only replay live data.
+        queuedEvents.filter { it["event"] == "message" && it["connectionId"] == connectionId &&
+            !(it["message"] as? ByteArray)?.contentEquals(request ?: byteArrayOf()).orFalse() }.forEach(listener)
         queuedEvents.clear()
     }
+
+    private fun Boolean?.orFalse(): Boolean = this == true
 
     fun detach(listener: (Map<String, Any?>) -> Unit) {
         if (eventListener === listener) eventListener = null
     }
 
     fun advertise(profile: Map<String, Any?>, result: MethodChannel.Result) {
+        val notifications = getSystemService(NotificationManager::class.java)
+        if (!notifications.areNotificationsEnabled() || notifications.getNotificationChannel(REQUEST_CHANNEL)?.importance == NotificationManager.IMPORTANCE_NONE) {
+            result.error("notification_permission_denied", "Enable OfflineRelay notifications and the Nearby help requests notification channel in Android Settings.", null)
+            stopAvailability()
+            return
+        }
         availabilityEnabled = true
         stopping = false
         this.profile = profile.toMap()
@@ -141,6 +166,7 @@ class BleRelayForegroundService : Service() {
     fun stopAvailability() {
         if (stopping) return
         stopping = true
+        clearRequestTimeout()
         availabilityEnabled = false
         activeConnectionId = null
         activePeer = null
@@ -159,6 +185,7 @@ class BleRelayForegroundService : Service() {
 
     override fun onDestroy() {
         stopping = true
+        handler.removeCallbacksAndMessages(null)
         availabilityEnabled = false
         session?.dispose()
         session = null
@@ -173,7 +200,16 @@ class BleRelayForegroundService : Service() {
     ) {
         session?.dispose()
         session = BleRelaySession(applicationContext, ::onSessionEvent)
-        session?.advertise(advertisedProfile, result ?: NoopResult)
+        try {
+            session?.advertise(advertisedProfile, result ?: NoopResult)
+        } catch (error: Exception) {
+            session?.dispose()
+            session = null
+            availabilityEnabled = false
+            notifyState()
+            result?.error("advertise_error", error.message ?: "Unable to advertise. Try again.", null)
+            stopAvailability()
+        }
         updateOngoingNotification("Available to nearby users")
     }
 
@@ -187,6 +223,8 @@ class BleRelayForegroundService : Service() {
             }
             "message" -> inspectIncomingEnvelope(event)
             "disconnected" -> {
+                clearRequestTimeout()
+                notifiedRequestIds.clear()
                 clearRequestNotification()
                 pendingRequest = null
                 pendingRequestId = null
@@ -195,6 +233,7 @@ class BleRelayForegroundService : Service() {
                 acceptedPeerName = null
             }
             "sessionEnded" -> {
+                clearRequestTimeout()
                 val shouldResume = availabilityEnabled && !stopping &&
                     activeConnectionId != null && profile != null
                 activeConnectionId = null
@@ -206,8 +245,15 @@ class BleRelayForegroundService : Service() {
                 acceptedPeerName = null
                 clearRequestNotification()
                 session = null
+                if (!shouldResume && !stopping) {
+                    availabilityEnabled = false
+                    notifyState()
+                    updateOngoingNotification("Help Others stopped. Open OfflineRelay to retry.")
+                    stopForeground(STOP_FOREGROUND_REMOVE)
+                    stopSelf()
+                }
                 if (shouldResume) {
-                    android.os.Handler(mainLooper).postDelayed({
+                    handler.postDelayed({
                         val savedProfile = profile
                         if (availabilityEnabled && !stopping && session == null && savedProfile != null) {
                             startSession(savedProfile)
@@ -226,17 +272,24 @@ class BleRelayForegroundService : Service() {
             val envelope = JSONObject(String(bytes, StandardCharsets.UTF_8))
             if (envelope.optInt("version") != 1 || envelope.optString("type") != "connection_request") return
             val requestId = envelope.optString("id").takeIf { it.isNotBlank() } ?: return
+            if (acceptedRequestId != null || pendingRequestId != null) return
             val body = envelope.optJSONObject("body") ?: JSONObject()
             val name = body.optString("name", "Someone nearby").ifBlank { "Someone nearby" }
             activeConnectionId = connectionId
             pendingRequest = bytes.clone()
             pendingRequestId = requestId
             pendingRequestName = name
+            clearRequestTimeout()
+            requestTimeout = Runnable {
+                if (activeConnectionId == connectionId && pendingRequestId == requestId) {
+                    session?.close(connectionId, NoopResult)
+                }
+            }.also { handler.postDelayed(it, 60_000) }
             acceptedRequestId = null
             acceptedPeerName = null
             if (notifiedRequestIds.add(requestId)) showRequestNotification(requestId, name)
         } catch (error: Exception) {
-            Log.w(TAG, "Ignoring malformed app envelope", error)
+            Log.w(TAG, "Ignoring malformed app envelope")
         }
     }
 
@@ -245,9 +298,12 @@ class BleRelayForegroundService : Service() {
             val envelope = JSONObject(String(bytes, StandardCharsets.UTF_8))
             val type = envelope.optString("type")
             if (type != "connection_accept" && type != "connection_reject") return
+            clearRequestTimeout()
             val requestId = envelope.optJSONObject("body")?.optString("requestId")
             val peerName = activePeerName()
             if (type == "connection_accept") {
+                availabilityEnabled = false
+                notifyState()
                 acceptedRequestId = requestId
                 acceptedPeerName = peerName
             } else {
@@ -255,6 +311,7 @@ class BleRelayForegroundService : Service() {
                 acceptedPeerName = null
             }
             if (requestId == pendingRequestId || requestId.isNullOrBlank()) {
+                notifiedRequestIds.clear()
                 pendingRequest = null
                 pendingRequestId = null
                 pendingRequestName = null
@@ -270,7 +327,7 @@ class BleRelayForegroundService : Service() {
                 ))
             }
         } catch (error: Exception) {
-            Log.w(TAG, "Unable to inspect outgoing app envelope", error)
+            Log.w(TAG, "Unable to inspect outgoing app envelope")
         }
     }
 
@@ -281,8 +338,15 @@ class BleRelayForegroundService : Service() {
         ?: "nearby user"
 
     private fun emit(event: Map<String, Any?>) {
+        val ownedEvent = event + ("owner" to "helper")
         val listener = eventListener
-        if (listener != null) listener(event) else queuedEvents.addLast(event)
+        if (listener != null) listener(ownedEvent) else {
+            if (event["event"] == "disconnected" || event["event"] == "sessionEnded") queuedEvents.clear()
+            if (queuedEvents.size >= 64) {
+                queuedEvents.clear()
+                android.os.Handler(mainLooper).post { stopAvailability() }
+            } else queuedEvents.addLast(ownedEvent)
+        }
     }
 
     private fun helperStateEvent(): Map<String, Any?> = mapOf(
@@ -317,7 +381,7 @@ class BleRelayForegroundService : Service() {
             .build()
 
     private fun updateOngoingNotification(text: String) {
-        if (!availabilityEnabled) return
+        if (!availabilityEnabled && activeConnectionId == null) return
         getSystemService(NotificationManager::class.java)
             .notify(ONGOING_NOTIFICATION_ID, ongoingNotification(text))
     }

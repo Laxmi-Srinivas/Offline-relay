@@ -10,3 +10,6 @@ key.properties
 .env
 .env.*
 !.env.example
+*.apk
+*.aab
+**/captures/

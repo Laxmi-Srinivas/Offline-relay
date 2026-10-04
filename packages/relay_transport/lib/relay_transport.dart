@@ -78,7 +78,12 @@ enum RelayMessageType {
   connectionRequest('connection_request'),
   connectionAccept('connection_accept'),
   connectionReject('connection_reject'),
+  connectionCancel('connection_cancel'),
   chat('chat'),
+  keyExchange('key_exchange'),
+  keyConfirmation('key_confirmation'),
+  secureMessage('secure_message'),
+  endChat('end_chat'),
   serviceRequest('service_request'),
   serviceResponse('service_response');
 

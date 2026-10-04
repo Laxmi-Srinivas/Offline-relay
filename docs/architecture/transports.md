@@ -1,5 +1,13 @@
 # Transport candidates and limitations
 
+Current Android MVP: BLE GATT is implemented and the reference phones have
+physical validation history. The helper foreground service owns advertising
+and peripheral GATT while the Activity is absent. Requester links remain
+foreground-only. Complete envelopes are bounded to 256 bytes; native data frames
+carry 16 payload bytes with sequential writes, reverse notifications and explicit
+transport ACKs. See [deployment audit](../testing/deployment-readiness.md).
+The candidate discussion below records the original architecture investigation.
+
 ## BLE: first phone-to-phone experiment
 
 A central scans and connects; a peripheral advertises a GATT service. The GATT

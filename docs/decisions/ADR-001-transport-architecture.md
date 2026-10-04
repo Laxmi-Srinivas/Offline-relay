@@ -3,6 +3,11 @@
 Status: accepted direction from the project brief; initial contract implemented.
 Date: 2026-10-04
 
+MVP outcome: the boundary now has an Android native BLE adapter with API 31
+minimum, 256-byte envelopes, background helper service and application encryption.
+LAN and iOS remain unimplemented. The original decision/context below is preserved
+as history; current limits are in `docs/testing/deployment-readiness.md`.
+
 ## Context
 
 OfflineRelay intends to connect nearby phones and laptops without requiring

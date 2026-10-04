@@ -1,35 +1,21 @@
-# OfflineRelay V1 scope
+﻿# OfflineRelay current MVP scope
 
-## Product goal
+OfflineRelay connects a nearby requester with a willing helper for temporary
+Bluetooth LE chat without sharing or tunnelling an Internet connection.
 
-An offline user discovers a nearby willing helper, connects locally, exchanges
-chat messages, and eventually receives the result of an Internet-dependent task
-performed by that helper. The helper's Internet connection is not shared or
-tunnelled. Local connectivity and Internet availability are separate concerns.
+The current Android demo implements Flutter Home/Nearby/Profile/chat screens,
+helper availability in a foreground service, normal request notifications,
+accept/decline/cancel, short encrypted chat, End Chat and local in-memory Report.
+Encryption setup is automatic after acceptance, with no human verification.
+Peer identity and active man-in-the-middle protection are not provided. No service-request execution,
+Internet availability verification, backend, accounts, persistence, moderation,
+automatic reconnect or LAN adapter is implemented.
 
-## Current implementation milestone
+Android BLE requires API 31+ and peripheral advertising support on the helper.
+The iOS/desktop folders remain scaffolds without this adapter. The independent
+BLE POC is frozen and its historical physical evidence is preserved.
 
-Establish a Flutter foundation and investigate a throwaway BLE exchange:
-discovery → connection → GATT service/characteristic discovery → `Hello` →
-slightly larger payload → application acknowledgement. Keep both apps open in
-the foreground. No chat UI is required; diagnostic controls/logs are sufficient.
-
-BLE is the first phone-to-phone candidate. LAN discovery through mDNS/Bonjour
-where supported, followed by TCP or WebSocket, is the laptop/shared-network
-candidate. LAN is not implemented in this milestone.
-
-## Intended targets, not verified support
-
-Android and iOS phones; Linux, macOS and Windows laptops. Exact OS minimums and
-device support require toolchain and physical-device validation. The first phone
-pair is provisionally two Android 12+ phones, awaiting confirmation of actual
-hardware. See [device matrix](../testing/device-matrix.md).
-No browser target is required.
-
-## Explicit exclusions
-
-No final UI, chat product, service requests, accounts, backend, persistence,
-production security, routing, automatic helper selection, Internet availability
-verification, Internet tunnelling, Wi-Fi Aware, Wi-Fi Direct, or complex native
-peer-to-peer technologies. No background-operation guarantee. Experiments must
-use non-sensitive test data and must not be presented as production ready.
+See [deployment audit](../testing/deployment-readiness.md),
+[architecture](../architecture/overview.md),
+[protocol](../protocols/message-protocol.md), and
+[device validation](../testing/validation.md) for actual behavior and limits.

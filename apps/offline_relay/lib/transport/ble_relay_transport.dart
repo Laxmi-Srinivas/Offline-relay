@@ -54,7 +54,7 @@ final class BleRelayTransport
             await _methods.invokeMethod<void>('startDiscovery');
           } catch (error, stack) {
             _scanning = false;
-            controller.addError(error, stack);
+            if (!controller.isClosed) controller.addError(error, stack);
           }
         }
       },
@@ -163,9 +163,19 @@ final class BleRelayTransport
         for (final controller in List.of(_discoveries)) {
           if (!controller.isClosed) controller.addError(error);
         }
+        _incoming.addError(error);
         break;
       case 'sessionEnded':
         _scanning = false;
+        for (final controller in List.of(_discoveries)) {
+          if (!controller.isClosed) {
+            controller.addError(
+              StateError(
+                event['reason']?.toString() ?? 'Search stopped. Try again.',
+              ),
+            );
+          }
+        }
         break;
     }
   }
@@ -174,6 +184,7 @@ final class BleRelayTransport
     for (final controller in List.of(_discoveries)) {
       if (!controller.isClosed) controller.addError(error, stack);
     }
+    if (!_disposed) _incoming.addError(error, stack);
   }
 
   _BleRelayConnection _connectionFrom(
@@ -219,18 +230,23 @@ final class BleRelayTransport
     if (_disposed) return;
     _disposed = true;
     await _eventSubscription.cancel();
+    // Disposing a Flutter engine must not close service-owned helper availability.
+    // Native dispose releases Activity-owned links; helper state is restored on attach.
     for (final connection in List.of(_connections.values)) {
-      await connection.close();
+      await connection._detach();
     }
     _connections.clear();
-    await _methods.invokeMethod<void>('dispose');
-    await _incoming.close();
-    await _availabilityStates.close();
-    await _acceptedConnections.close();
-    for (final controller in _discoveries) {
-      await controller.close();
+    try {
+      await _methods.invokeMethod<void>('dispose');
+    } finally {
+      await _incoming.close();
+      await _availabilityStates.close();
+      await _acceptedConnections.close();
+      for (final controller in List.of(_discoveries)) {
+        await controller.close();
+      }
+      _discoveries.clear();
     }
-    _discoveries.clear();
   }
 }
 
@@ -281,7 +297,15 @@ final class _BleRelayConnection implements RelayConnection {
     if (_closed) return;
     _closed = true;
     _onClose();
-    await _methods.invokeMethod<void>('close', {'connectionId': _id});
+    try {
+      await _methods.invokeMethod<void>('close', {'connectionId': _id});
+    } finally {
+      await _messages.close();
+    }
+  }
+
+  Future<void> _detach() async {
+    _closed = true;
     await _messages.close();
   }
 }

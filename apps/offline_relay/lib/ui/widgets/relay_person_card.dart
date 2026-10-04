@@ -107,12 +107,14 @@ class _AvailableLabel extends StatelessWidget {
         child: SizedBox(width: 7, height: 7),
       ),
       SizedBox(width: 6),
-      Text(
-        'Available nearby',
-        style: TextStyle(
-          color: RelayColors.green,
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
+      Flexible(
+        child: Text(
+          'Available nearby',
+          style: TextStyle(
+            color: RelayColors.green,
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ),
     ],

@@ -1,9 +1,11 @@
-# OfflineRelay host
+﻿# OfflineRelay Android app
 
-Minimal placeholder, not final UI. No networking is initialized. The sole local
-dependency is the pure Dart transport contract; the host does not import or
-depend on `experiments/ble_poc`.
+The current Flutter UI supports Profile, Home, Nearby, helper requests and
+verified encrypted chat. Android GATT and the helper foreground service are
+implemented in `android/app/src/main/kotlin/`. Other platform folders are
+scaffolds with no BLE implementation.
 
-Scaffolds: Android, iOS, Linux, macOS, Windows. Platform builds remain unverified
-until the corresponding toolchain is available. See the repository
-[README](../../README.md) and [validation record](../../docs/testing/validation.md).
+See the repository [README](../../README.md) for commands and requirements,
+[deployment audit](../../docs/testing/deployment-readiness.md) for lifecycle
+limits, and [security design](../../docs/security/e2e-chat.md) for chat encryption.
+The frozen `experiments/ble_poc` is independent and is not imported by this app.

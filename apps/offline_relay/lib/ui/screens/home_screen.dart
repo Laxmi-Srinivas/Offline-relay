@@ -22,7 +22,7 @@ class HomeScreen extends StatelessWidget {
             width: 38,
             height: 38,
             decoration: BoxDecoration(
-              color: RelayColors.green,
+              color: RelayColors.canvas,
               borderRadius: BorderRadius.circular(13),
               boxShadow: const [
                 BoxShadow(
@@ -32,11 +32,21 @@ class HomeScreen extends StatelessWidget {
                 ),
               ],
             ),
-            child: const Icon(Icons.favorite_border, color: Colors.white),
+            child: Image.asset(
+              'assets/branding/offline_relay_horizontal.png',
+              fit: BoxFit.contain,
+              excludeFromSemantics: true,
+            ),
           ),
           const SizedBox(width: 10),
-          Text('OfflineRelay', style: Theme.of(context).textTheme.titleLarge),
-          const Spacer(),
+          Expanded(
+            child: Text(
+              'OfflineRelay',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+          ),
           _ModePill(
             label: helperAvailable ? 'Help Others on' : 'Nearby help',
             color: helperAvailable ? RelayColors.green : RelayColors.muted,

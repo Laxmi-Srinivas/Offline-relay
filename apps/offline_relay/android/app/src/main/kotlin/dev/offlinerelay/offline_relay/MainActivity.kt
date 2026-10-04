@@ -37,6 +37,7 @@ class MainActivity : FlutterActivity() {
     private var helperBinder: BleRelayForegroundService.LocalBinder? = null
     private var helperBound = false
     private var pendingHelperAction: (() -> Unit)? = null
+    private var pendingHelperResult: MethodChannel.Result? = null
     private val helperEventListener: (Map<String, Any?>) -> Unit = ::emit
 
     private val helperConnection = object : ServiceConnection {
@@ -45,12 +46,16 @@ class MainActivity : FlutterActivity() {
             helperBinder?.service()?.attach(helperEventListener)
             pendingHelperAction?.also {
                 pendingHelperAction = null
+                pendingHelperResult = null
                 it()
             }
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
             helperBinder = null
+            pendingHelperResult?.error("service_unavailable", "Helper service disconnected. Try enabling Help Others again.", null)
+            pendingHelperResult = null
+            pendingHelperAction = null
             emit(mapOf("event" to "helperState", "enabled" to false))
         }
     }
@@ -58,8 +63,11 @@ class MainActivity : FlutterActivity() {
     private fun emit(event: Map<String, Any?>) {
         runOnUiThread {
             val sink = eventSink
-            if (sink != null) sink.success(event) else unattachedEvents.addLast(event)
-            if (event["event"] == "disconnected" || event["event"] == "sessionEnded") {
+            if (sink != null) sink.success(event) else {
+                if (unattachedEvents.size >= 64) unattachedEvents.removeFirst()
+                unattachedEvents.addLast(event)
+            }
+            if (event["event"] == "sessionEnded" && event["owner"] != "helper") {
                 session = null
             }
         }
@@ -71,10 +79,16 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun withBlePermissions(result: MethodChannel.Result, action: () -> Unit) {
+        if (pendingPermissionResult != null) {
+            result.error("permission_busy", "Finish the current permission request, then try again.", null)
+            return
+        }
         if (blePermissions.all { checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }) {
             try {
                 action()
             } catch (error: Exception) {
+                session?.dispose()
+                session = null
                 result.error("ble_error", error.message ?: error.javaClass.simpleName, null)
             }
             return
@@ -111,14 +125,21 @@ class MainActivity : FlutterActivity() {
             action()
             return
         }
+        if (pendingHelperAction != null) {
+            result.error("service_busy", "Help Others is starting. Please wait.", null)
+            return
+        }
         pendingHelperAction = action
+        pendingHelperResult = result
         try {
             val intent = Intent(this, BleRelayForegroundService::class.java)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent)
             else startService(intent)
             bindHelperService()
+            if (!helperBound) throw IllegalStateException("Helper service did not bind")
         } catch (error: Exception) {
             pendingHelperAction = null
+            pendingHelperResult = null
             result.error("service_start_failed", error.message ?: error.javaClass.simpleName, null)
         }
     }
@@ -133,6 +154,9 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun unbindHelperService() {
+        pendingHelperResult?.error("activity_stopped", "Return to OfflineRelay and enable Help Others again.", null)
+        pendingHelperResult = null
+        pendingHelperAction = null
         if (!helperBound) return
         helperBinder?.service()?.detach(helperEventListener)
         unbindService(helperConnection)
@@ -161,7 +185,8 @@ class MainActivity : FlutterActivity() {
                 }
             })
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, METHODS)
-            .setMethodCallHandler { call, result ->
+            .setMethodCallHandler { call, rawResult ->
+                val result = OnceResult(rawResult)
                 try {
                     when (call.method) {
                         "advertise" -> withHelpPermissions(result) {
@@ -260,15 +285,28 @@ class MainActivity : FlutterActivity() {
 
     override fun onStop() {
         unbindHelperService()
-        session?.dispose()
-        session = null
+        // A runtime permission dialog can stop the Activity; it must not destroy discovery.
+        if (pendingPermissionResult == null && !isChangingConfigurations) {
+            session?.dispose()
+            session = null
+        }
         super.onStop()
     }
 
     override fun onDestroy() {
+        pendingPermissionResult?.error("activity_destroyed", "Return to OfflineRelay and try again.", null)
+        pendingPermissionResult = null
+        pendingPermissionAction = null
         unbindHelperService()
         session?.dispose()
         session = null
         super.onDestroy()
+    }
+
+    private class OnceResult(private val delegate: MethodChannel.Result) : MethodChannel.Result {
+        private var completed = false
+        override fun success(result: Any?) { if (!completed) { completed = true; delegate.success(result) } }
+        override fun error(code: String, message: String?, details: Any?) { if (!completed) { completed = true; delegate.error(code, message, details) } }
+        override fun notImplemented() { if (!completed) { completed = true; delegate.notImplemented() } }
     }
 }

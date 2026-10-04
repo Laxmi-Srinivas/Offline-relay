@@ -1,11 +1,39 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:relay_transport/relay_transport.dart';
 
 import 'transport/helper_availability.dart';
+import 'security/relay_secure_session.dart';
 
 enum RelayUserRole { offlineUser, internetHelper }
+
+enum RelayChatEndReason { local, remote, connectionLost, securityFailed }
+
+enum RelayRequestState {
+  none,
+  pending,
+  incoming,
+  accepted,
+  declined,
+  cancelled,
+  failed,
+}
+
+enum RelaySecurityState { idle, exchangingKeys, ready, failed }
+
+final class RelayLocalReport {
+  const RelayLocalReport({
+    required this.peerName,
+    required this.reason,
+    required this.note,
+  });
+
+  final String peerName;
+  final String reason;
+  final String note;
+}
 
 class RelayConversationMessage {
   const RelayConversationMessage({
@@ -24,10 +52,12 @@ class RelayDemoController extends ChangeNotifier {
   RelayDemoController(
     this._transport, {
     this.discoveryDuration = const Duration(seconds: 12),
+    this.requestDuration = const Duration(seconds: 60),
+    this.securityDuration = const Duration(minutes: 2),
   }) {
     _incomingSubscription = _transport.incomingConnections.listen(
       _onIncomingConnection,
-      onError: (Object error) => _setStatus('Connection error: $error'),
+      onError: (Object error) => reportError(error),
     );
     final helperControl = _transport is HelperAvailabilityControl
         ? _transport as HelperAvailabilityControl
@@ -44,6 +74,8 @@ class RelayDemoController extends ChangeNotifier {
 
   final RelayTransport _transport;
   final Duration discoveryDuration;
+  final Duration requestDuration;
+  final Duration securityDuration;
   final peers = <RelayPeer>[];
   final messages = <RelayConversationMessage>[];
 
@@ -51,6 +83,7 @@ class RelayDemoController extends ChangeNotifier {
   RelayUserRole role = RelayUserRole.offlineUser;
   String status = 'Choose your name and role to begin.';
   String? remoteName;
+  String? remoteRoleLabel;
   String? incomingPeerName;
   String? incomingRequestId;
   bool isDiscovering = false;
@@ -60,6 +93,13 @@ class RelayDemoController extends ChangeNotifier {
   bool inChat = false;
   bool isSearchComplete = false;
   String? errorMessage;
+  RelayRequestState requestState = RelayRequestState.none;
+  RelaySecurityState securityState = RelaySecurityState.idle;
+  RelayChatEndReason? chatEndReason;
+  bool _localKeyConfirmed = false;
+  bool _remoteKeyConfirmed = false;
+  Future<void>? _keyExchangeSend;
+  RelayLocalReport? submittedReport;
 
   RelayConnection? _connection;
   RelayConnection? _incomingConnection;
@@ -70,12 +110,50 @@ class RelayDemoController extends ChangeNotifier {
   StreamSubscription<RelayPeer>? _discoverySubscription;
   StreamSubscription<Uint8List>? _messageSubscription;
   Timer? _discoveryTimer;
+  Timer? _requestTimer;
+  Timer? _securityTimer;
+  bool _disposed = false;
+  bool _responding = false;
+  Future<void> _sendQueue = Future<void>.value();
+  Future<void> _secureSendQueue = Future<void>.value();
+  RelaySecureSession? _secureSession;
+  bool _isSessionInitiator = false;
+  bool _localEndRequested = false;
+  bool _localReportSubmitted = false;
+  Future<void> _receiveQueue = Future<void>.value();
 
   bool get hasIncomingRequest =>
       _incomingConnection != null && incomingRequestId != null;
 
   bool get noPeopleFound =>
       isSearchComplete && peers.isEmpty && errorMessage == null;
+  bool get isChatTerminal => chatEndReason != null;
+  bool get hasSubmittedReport => _localReportSubmitted;
+  bool get isResponding => _responding;
+
+  @override
+  void notifyListeners() {
+    if (!_disposed) super.notifyListeners();
+  }
+
+  Future<void> _closeConnection(RelayConnection connection) async {
+    try {
+      await connection.close();
+    } catch (error) {
+      if (!_disposed) reportError(error);
+    }
+  }
+
+  void _startRequestDeadline(RelayConnection connection) {
+    _requestTimer?.cancel();
+    _requestTimer = Timer(requestDuration, () {
+      _onConnectionEnded(
+        connection,
+        'The connection request timed out. Try again.',
+      );
+      unawaited(_closeConnection(connection));
+    });
+  }
 
   RelayProfile get localProfile => RelayProfile(
     id: 'local-${DateTime.now().microsecondsSinceEpoch}',
@@ -84,12 +162,19 @@ class RelayDemoController extends ChangeNotifier {
   );
 
   void updateProfile({required String name, required RelayUserRole role}) {
-    displayName = name.trim();
+    displayName = name;
     this.role = role;
     notifyListeners();
   }
 
   Future<void> findNearbyHelpers() async {
+    if (_disposed ||
+        isConnecting ||
+        isWaitingForAcceptance ||
+        _incomingConnection != null ||
+        inChat) {
+      return;
+    }
     _requireName();
     if (role != RelayUserRole.offlineUser) {
       throw StateError('Choose Offline User to find helpers.');
@@ -116,6 +201,8 @@ class RelayDemoController extends ChangeNotifier {
         isDiscovering = false;
         isSearchComplete = true;
         errorMessage = _friendlyError(error);
+        unawaited(_discoverySubscription?.cancel());
+        _discoverySubscription = null;
         _setStatus('Discovery stopped: $error');
       },
     );
@@ -133,6 +220,13 @@ class RelayDemoController extends ChangeNotifier {
   }
 
   Future<void> offerHelp() async {
+    if (_disposed ||
+        isConnecting ||
+        isWaitingForAcceptance ||
+        _incomingConnection != null ||
+        inChat) {
+      return;
+    }
     _requireName();
     if (role != RelayUserRole.internetHelper) {
       throw StateError('Choose Internet Helper to offer help.');
@@ -165,26 +259,46 @@ class RelayDemoController extends ChangeNotifier {
   }
 
   Future<void> connectTo(RelayPeer peer) async {
+    if (_disposed ||
+        isConnecting ||
+        isWaitingForAcceptance ||
+        _connection != null ||
+        _incomingConnection != null ||
+        inChat) {
+      return;
+    }
     _requireName();
+    // Validate metadata before opening GATT so a long UTF-8 name cannot strand a link.
+    final request = RelayEnvelope.create(
+      type: RelayMessageType.connectionRequest,
+      body: {'name': _cleanName(displayName), 'role': 'offline_user'},
+    );
+    request.encode();
     isConnecting = true;
+    remoteName = peer.label;
     errorMessage = null;
+    requestState = RelayRequestState.none;
     _discoveryTimer?.cancel();
     status = 'Connecting to ${peer.label}…';
     notifyListeners();
     try {
       final connection = await _transport.connect(peer);
+      if (_disposed || requestState == RelayRequestState.cancelled) {
+        await _closeConnection(connection);
+        return;
+      }
       _connection = connection;
       remoteName = peer.label;
+      remoteRoleLabel = 'Internet Helper';
+      _isSessionInitiator = true;
+      requestState = RelayRequestState.pending;
       _listenForMessages(connection);
       await _discoverySubscription?.cancel();
       _discoverySubscription = null;
       isDiscovering = false;
-      final request = RelayEnvelope.create(
-        type: RelayMessageType.connectionRequest,
-        body: {'name': _cleanName(displayName), 'role': 'offline_user'},
-      );
       _outgoingRequestId = request.id;
       isWaitingForAcceptance = true;
+      _startRequestDeadline(connection);
       status = 'Connection request sent to ${peer.label}.';
       notifyListeners();
       await _sendEnvelope(request);
@@ -192,12 +306,19 @@ class RelayDemoController extends ChangeNotifier {
         status = 'Connection request sent to ${peer.label}.';
       }
     } catch (error) {
+      if (_disposed || requestState == RelayRequestState.cancelled) return;
+      _requestTimer?.cancel();
+      final failedConnection = _connection;
+      _connection = null;
+      isWaitingForAcceptance = false;
+      if (failedConnection != null) await _closeConnection(failedConnection);
       isDiscovering = false;
       isSearchComplete = true;
       _discoveryTimer?.cancel();
       await _discoverySubscription?.cancel();
       _discoverySubscription = null;
       errorMessage = _friendlyError(error);
+      requestState = RelayRequestState.failed;
       status = 'Couldn’t connect to ${peer.label}.';
       rethrow;
     } finally {
@@ -207,41 +328,71 @@ class RelayDemoController extends ChangeNotifier {
   }
 
   Future<void> acceptIncomingRequest() async {
+    if (_responding || _disposed) return;
     final connection = _incomingConnection;
     final requestId = incomingRequestId;
     if (connection == null || requestId == null) {
       throw StateError('There is no connection request to accept.');
     }
-    _connection = connection;
-    remoteName = incomingPeerName ?? connection.peer.label;
-    incomingPeerName = null;
-    incomingRequestId = null;
-    _incomingConnection = null;
-    await _transport.stopAdvertising();
-    isOffering = false;
-    await _sendEnvelope(
-      RelayEnvelope.create(
-        type: RelayMessageType.connectionAccept,
-        body: {'requestId': requestId},
-      ),
-    );
-    inChat = true;
-    status = 'Connected with $remoteName.';
+    _responding = true;
     notifyListeners();
+    _requestTimer?.cancel();
+    try {
+      _connection = connection;
+      remoteName = incomingPeerName ?? connection.peer.label;
+      remoteRoleLabel = 'Offline User';
+      _isSessionInitiator = false;
+      incomingPeerName = null;
+      incomingRequestId = null;
+      _incomingConnection = null;
+      await _transport.stopAdvertising();
+      isOffering = false;
+      inChat = true;
+      requestState = RelayRequestState.accepted;
+      _resetSecureState();
+      await _createSecureSession(isInitiator: false, sendKey: false);
+      notifyListeners();
+      await _sendEnvelope(
+        RelayEnvelope.create(
+          type: RelayMessageType.connectionAccept,
+          body: {'requestId': requestId},
+        ),
+      );
+      await _sendKeyExchange();
+      status = 'Connected with $remoteName.';
+      notifyListeners();
+    } catch (error) {
+      _finishChat(RelayChatEndReason.connectionLost, connection);
+      rethrow;
+    } finally {
+      _responding = false;
+      notifyListeners();
+    }
   }
 
   Future<void> rejectIncomingRequest() async {
+    if (_responding || _disposed) return;
     final connection = _incomingConnection;
     final requestId = incomingRequestId;
     if (connection == null || requestId == null) return;
-    await connection.send(
-      RelayEnvelope.create(
-        type: RelayMessageType.connectionReject,
-        body: {'requestId': requestId},
-      ).encode(),
-    );
-    _clearIncomingRequest();
-    await connection.close();
+    _responding = true;
+    notifyListeners();
+    _requestTimer?.cancel();
+    try {
+      await connection.send(
+        RelayEnvelope.create(
+          type: RelayMessageType.connectionReject,
+          body: {'requestId': requestId},
+        ).encode(),
+      );
+    } finally {
+      _incomingConnection = null;
+      _clearIncomingRequest();
+      await _closeConnection(connection);
+      _responding = false;
+      notifyListeners();
+    }
+    requestState = RelayRequestState.declined;
     isOffering = role == RelayUserRole.internetHelper;
     status = isOffering
         ? 'Connection declined. You are still offering help.'
@@ -252,11 +403,14 @@ class RelayDemoController extends ChangeNotifier {
   Future<void> sendChat(String text) async {
     final value = text.trim();
     if (value.isEmpty) return;
-    final envelope = RelayEnvelope.create(
-      type: RelayMessageType.chat,
-      body: {'text': value},
-    );
-    await _sendEnvelope(envelope);
+    if (securityState != RelaySecurityState.ready) {
+      throw StateError('Encrypted chat is still connecting. Please wait.');
+    }
+    final connection = _connection;
+    final envelope = await _sendSecurePayload(RelayMessageType.chat, {
+      'text': value,
+    });
+    if (_disposed || !identical(connection, _connection) || !inChat) return;
     messages.add(
       RelayConversationMessage(
         id: envelope.id,
@@ -279,7 +433,69 @@ class RelayDemoController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> endChat() async {
+    final connection = _connection;
+    if (!inChat || connection == null || chatEndReason != null) return;
+    _localEndRequested = true;
+    errorMessage = null;
+    try {
+      if (securityState == RelaySecurityState.ready) {
+        await _sendSecurePayload(RelayMessageType.endChat, const {});
+      } else {
+        await _sendEnvelope(
+          RelayEnvelope.create(type: RelayMessageType.endChat, body: const {}),
+        );
+      }
+    } catch (_) {
+      errorMessage = 'Chat ended on this phone. The other phone may not have received the end notice.';
+    } finally {
+      _finishChat(RelayChatEndReason.local, connection);
+    }
+  }
+
+  void submitLocalReport({required String reason, String note = ''}) {
+    if (!inChat || securityState != RelaySecurityState.ready) {
+      throw StateError('A report can only be recorded during an active chat.');
+    }
+    submittedReport = RelayLocalReport(
+      peerName: remoteName ?? 'Nearby user',
+      reason: reason,
+      note: note.trim(),
+    );
+    _localReportSubmitted = true;
+    notifyListeners();
+  }
+
+  Future<void> cancelPendingRequest() async {
+    if (!isWaitingForAcceptance && !isConnecting) return;
+    _requestTimer?.cancel();
+    requestState = RelayRequestState.cancelled;
+    final connection = _connection;
+    _connection = null;
+    await _messageSubscription?.cancel();
+    _messageSubscription = null;
+    if (connection != null) {
+      try {
+        await connection.send(
+          RelayEnvelope.create(
+            type: RelayMessageType.connectionCancel,
+            body: {'requestId': _outgoingRequestId},
+          ).encode(),
+        );
+      } catch (_) {
+        // Closing the GATT connection still cancels the local pending request.
+      }
+    }
+    if (connection != null) await _closeConnection(connection);
+    isWaitingForAcceptance = false;
+    requestState = RelayRequestState.cancelled;
+    status = 'Connection request cancelled.';
+    notifyListeners();
+  }
+
   Future<void> returnToNearby() async {
+    _requestTimer?.cancel();
+    _securityTimer?.cancel();
     _discoveryTimer?.cancel();
     await _discoverySubscription?.cancel();
     _discoverySubscription = null;
@@ -288,7 +504,9 @@ class RelayDemoController extends ChangeNotifier {
     _incomingConnection = null;
     await _messageSubscription?.cancel();
     _messageSubscription = null;
-    if (connection != null) await connection.close();
+    _secureSession?.close();
+    _secureSession = null;
+    if (connection != null) await _closeConnection(connection);
     await _transport.stopAdvertising();
     final helperControl = _transport is HelperAvailabilityControl
         ? _transport as HelperAvailabilityControl
@@ -300,12 +518,18 @@ class RelayDemoController extends ChangeNotifier {
     messages.clear();
     _clearIncomingRequest();
     remoteName = null;
+    remoteRoleLabel = null;
     _outgoingRequestId = null;
     isDiscovering = false;
     isSearchComplete = false;
     isOffering = false;
     isWaitingForAcceptance = false;
     inChat = false;
+    requestState = RelayRequestState.none;
+    chatEndReason = null;
+    submittedReport = null;
+    _localReportSubmitted = false;
+    _resetSecureState();
     status = 'Choose Find Nearby Helpers or Offer Help.';
     errorMessage = null;
     notifyListeners();
@@ -319,7 +543,9 @@ class RelayDemoController extends ChangeNotifier {
       return;
     }
     _incomingConnection = connection;
+    _startRequestDeadline(connection);
     incomingPeerName = connection.peer.label;
+    requestState = RelayRequestState.incoming;
     _listenForMessages(connection);
     status = 'A nearby user wants to connect.';
     notifyListeners();
@@ -340,6 +566,7 @@ class RelayDemoController extends ChangeNotifier {
   }
 
   void _onHelperAccepted(HelperAcceptedEvent event) {
+    if (inChat || isChatTerminal || _disposed) return;
     final pending = _incomingConnection;
     if (pending != null) {
       _connection = pending;
@@ -350,37 +577,45 @@ class RelayDemoController extends ChangeNotifier {
     incomingRequestId = null;
     isOffering = false;
     isWaitingForAcceptance = false;
-    inChat = true;
-    status = 'Connected with $remoteName.';
-    notifyListeners();
+    // Restored native acceptance has no matching in-memory keys after engine loss.
+    if (_connection case final connection?) {
+      _finishChat(RelayChatEndReason.connectionLost, connection);
+    }
   }
 
   void _listenForMessages(RelayConnection connection) {
     unawaited(_messageSubscription?.cancel());
     _messageSubscription = connection.messages.listen(
-      (bytes) => _onEnvelope(connection, bytes),
+      (bytes) {
+        _receiveQueue = _receiveQueue.then((_) async {
+          if (_disposed ||
+              chatEndReason != null ||
+              (!identical(_connection, connection) &&
+                  !identical(_incomingConnection, connection))) {
+            return;
+          }
+          try {
+            await _onEnvelope(connection, bytes);
+          } catch (error) {
+            reportError(error);
+          }
+        });
+      },
       onError: (Object error) {
-        inChat = false;
-        isWaitingForAcceptance = false;
-        _setStatus('Connection ended: $error');
+        _onConnectionEnded(connection, error.toString());
       },
       onDone: () {
-        if (identical(_connection, connection) ||
-            identical(_incomingConnection, connection)) {
-          inChat = false;
-          isWaitingForAcceptance = false;
-          _setStatus('Connection closed.');
-        }
+        _onConnectionEnded(connection, 'Connection closed.');
       },
     );
   }
 
-  void _onEnvelope(RelayConnection connection, Uint8List bytes) {
+  Future<void> _onEnvelope(RelayConnection connection, Uint8List bytes) async {
     late final RelayEnvelope envelope;
     try {
       envelope = RelayEnvelope.decode(bytes);
     } catch (error) {
-      _setStatus('Could not read message: $error');
+      reportError(error);
       return;
     }
     switch (envelope.type) {
@@ -389,36 +624,67 @@ class RelayDemoController extends ChangeNotifier {
             !identical(_incomingConnection, connection)) {
           return;
         }
+        if (incomingRequestId != null) return;
         incomingRequestId = envelope.id;
         incomingPeerName =
             _bodyString(envelope, 'name') ?? connection.peer.label;
+        remoteRoleLabel = _roleLabel(_bodyString(envelope, 'role'));
+        requestState = RelayRequestState.incoming;
         status = 'Connection request from $incomingPeerName.';
         notifyListeners();
       case RelayMessageType.connectionAccept:
-        if (envelope.body['requestId'] != _outgoingRequestId) return;
+        if (!isWaitingForAcceptance ||
+            envelope.body['requestId'] != _outgoingRequestId) {
+          return;
+        }
+        _requestTimer?.cancel();
         isWaitingForAcceptance = false;
         inChat = true;
+        requestState = RelayRequestState.accepted;
+        _resetSecureState();
         status = 'Connection accepted by ${remoteName ?? 'helper'}.';
         notifyListeners();
+        await _createSecureSession(isInitiator: true);
       case RelayMessageType.connectionReject:
-        if (envelope.body['requestId'] != _outgoingRequestId) return;
+        if (!isWaitingForAcceptance ||
+            envelope.body['requestId'] != _outgoingRequestId) {
+          return;
+        }
+        _requestTimer?.cancel();
         isWaitingForAcceptance = false;
         inChat = false;
+        requestState = RelayRequestState.declined;
         status = 'The helper declined the connection request.';
         _connection = null;
-        unawaited(connection.close());
+        await connection.close();
+        notifyListeners();
+      case RelayMessageType.connectionCancel:
+        if (!identical(_incomingConnection, connection) ||
+            envelope.body['requestId'] != incomingRequestId) {
+          return;
+        }
+        _requestTimer?.cancel();
+        _incomingConnection = null;
+        _clearIncomingRequest();
+        requestState = RelayRequestState.cancelled;
+        status = 'The connection request was cancelled.';
+        await connection.close();
         notifyListeners();
       case RelayMessageType.chat:
-        final text = _bodyString(envelope, 'text');
-        if (text == null) return;
-        messages.add(
-          RelayConversationMessage(
-            id: envelope.id,
-            text: text,
-            fromLocalUser: false,
-          ),
-        );
-        notifyListeners();
+      // Chat envelopes are accepted only inside authenticated encrypted packets.
+      case RelayMessageType.keyExchange:
+        if (envelope.type == RelayMessageType.keyExchange) {
+          await _handleKeyExchange(envelope);
+        }
+      case RelayMessageType.keyConfirmation:
+        // Key confirmation is carried only inside an authenticated encrypted packet.
+        return;
+      case RelayMessageType.secureMessage:
+        await _handleSecureMessage(connection, envelope);
+      case RelayMessageType.endChat:
+        if (inChat && securityState != RelaySecurityState.ready) {
+          _finishChat(RelayChatEndReason.remote, connection);
+        }
       case RelayMessageType.serviceRequest:
       case RelayMessageType.serviceResponse:
       // Reserved by the shared transport contract; this MVP treats them as
@@ -429,7 +695,282 @@ class RelayDemoController extends ChangeNotifier {
   Future<void> _sendEnvelope(RelayEnvelope envelope) async {
     final connection = _connection;
     if (connection == null) throw StateError('Connect first.');
-    await connection.send(envelope.encode());
+    final bytes = envelope.encode();
+    final send = _sendQueue.then((_) async {
+      if (_disposed || !identical(connection, _connection)) {
+        throw StateError('Connection is closed.');
+      }
+      await connection.send(bytes);
+    });
+    _sendQueue = send.catchError((Object _) {});
+    await send;
+  }
+
+  Future<void> _createSecureSession({
+    required bool isInitiator,
+    bool sendKey = true,
+  }) async {
+    if (_secureSession != null) return;
+    final connection = _connection;
+    final session = await RelaySecureSession.create(isInitiator: isInitiator);
+    if (_disposed || !inChat || !identical(connection, _connection)) {
+      session.close();
+      return;
+    }
+    _secureSession = session;
+    securityState = RelaySecurityState.exchangingKeys;
+    _securityTimer?.cancel();
+    _securityTimer = Timer(securityDuration, () {
+      if (securityState != RelaySecurityState.ready) {
+        unawaited(_endForSecurityFailure());
+      }
+    });
+    if (sendKey) await _sendKeyExchange();
+  }
+
+  Future<void> _sendKeyExchange() =>
+      _keyExchangeSend ??= _sendOwnPublicKey();
+
+  Future<void> _sendOwnPublicKey() async {
+    final secureSession = _secureSession;
+    if (secureSession == null) {
+      throw StateError('Secure session is unavailable.');
+    }
+    await _sendEnvelope(
+      RelayEnvelope.create(
+        type: RelayMessageType.keyExchange,
+        body: {'publicKey': await secureSession.publicKeyBase64},
+      ),
+    );
+  }
+
+  Future<void> _handleKeyExchange(RelayEnvelope envelope) async {
+    if (!inChat) return;
+    if (_secureSession == null) {
+      await _createSecureSession(isInitiator: _isSessionInitiator);
+    }
+    if (securityState != RelaySecurityState.exchangingKeys || _localKeyConfirmed) return;
+    final publicKey = _bodyString(envelope, 'publicKey');
+    if (publicKey == null) {
+      await _endForSecurityFailure();
+      return;
+    }
+    try {
+      final session = _secureSession!;
+      await session.establish(publicKey);
+      if (_disposed || !inChat || !identical(session, _secureSession)) return;
+      // Send our public key before confirmation, including when the peer key
+      // arrives while the helper's acceptance is still waiting for its ACK.
+      await _sendKeyExchange();
+      await _sendSecurePayload(RelayMessageType.keyConfirmation, {'confirm': true});
+      if (_disposed || !inChat || !identical(session, _secureSession)) return;
+      _localKeyConfirmed = true;
+      _updateSecurityReady();
+      notifyListeners();
+    } catch (_) {
+      await _endForSecurityFailure();
+    }
+  }
+
+  Future<void> _handleSecureMessage(
+    RelayConnection connection,
+    RelayEnvelope envelope,
+  ) async {
+    final secureSession = _secureSession;
+    final counter = envelope.body['n'];
+    final ciphertext = envelope.body['c'];
+    if (secureSession == null || counter is! int || ciphertext is! String) {
+      await _endForSecurityFailure();
+      return;
+    }
+    try {
+      final cleartext = await secureSession.decrypt(
+        counter: counter,
+        ciphertext: ciphertext,
+      );
+      if (_disposed ||
+          !inChat ||
+          !identical(secureSession, _secureSession) ||
+          !identical(connection, _connection)) {
+        return;
+      }
+      final decoded = jsonDecode(utf8.decode(cleartext));
+      if (decoded is! Map<String, dynamic> ||
+          decoded['t'] is! String ||
+          decoded['b'] is! Map<String, dynamic>) {
+        throw const FormatException('Malformed encrypted application message.');
+      }
+      final type = RelayMessageType.parse(decoded['t'] as String);
+      final body = Map<String, Object?>.from(
+        decoded['b'] as Map<String, dynamic>,
+      );
+      switch (type) {
+        case RelayMessageType.keyConfirmation:
+          if (securityState != RelaySecurityState.exchangingKeys ||
+              body['confirm'] != true) {
+            await _endForSecurityFailure();
+            return;
+          }
+          _remoteKeyConfirmed = true;
+          _updateSecurityReady();
+          notifyListeners();
+        case RelayMessageType.chat:
+          if (securityState != RelaySecurityState.ready) {
+            await _endForSecurityFailure();
+            return;
+          }
+          final text = body['text'];
+          if (text is! String || text.trim().isEmpty) return;
+          messages.add(
+            RelayConversationMessage(
+              id: envelope.id,
+              text: text,
+              fromLocalUser: false,
+            ),
+          );
+          notifyListeners();
+        case RelayMessageType.endChat:
+          if (securityState != RelaySecurityState.ready) {
+            await _endForSecurityFailure();
+            return;
+          }
+          _finishChat(RelayChatEndReason.remote, connection);
+        default:
+          await _endForSecurityFailure();
+      }
+    } catch (_) {
+      await _endForSecurityFailure();
+    }
+  }
+
+  Future<RelayEnvelope> _sendSecurePayload(
+    RelayMessageType type,
+    Map<String, Object?> body,
+  ) {
+    final session = _secureSession;
+    final send = _secureSendQueue.then((_) {
+      if (!identical(session, _secureSession)) {
+        throw StateError('Connection is closed.');
+      }
+      return _encryptAndSend(type, body);
+    });
+    _secureSendQueue = send.then<void>((_) {}, onError: (Object _) {});
+    return send;
+  }
+
+  Future<RelayEnvelope> _encryptAndSend(
+    RelayMessageType type,
+    Map<String, Object?> body,
+  ) async {
+    final secureSession = _secureSession;
+    if (secureSession == null ||
+        (securityState != RelaySecurityState.ready &&
+            type != RelayMessageType.keyConfirmation)) {
+      throw StateError('Secure session is not ready.');
+    }
+    final cleartext = utf8.encode(jsonEncode({'t': type.wireName, 'b': body}));
+    final frame = await secureSession.encrypt(cleartext);
+    if (_disposed || !inChat || !identical(secureSession, _secureSession)) {
+      throw StateError('Connection is closed.');
+    }
+    final envelope = RelayEnvelope(
+      id: 's${frame.counter.toRadixString(36)}',
+      type: RelayMessageType.secureMessage,
+      body: {'n': frame.counter, 'c': frame.ciphertext},
+    );
+    try {
+      envelope.encode();
+    } on FormatException {
+      throw StateError(
+        'This message is too long for nearby chat. Shorten it and try again.',
+      );
+    }
+    await _sendEnvelope(envelope);
+    return envelope;
+  }
+
+  void _updateSecurityReady() {
+    if (_localKeyConfirmed && _remoteKeyConfirmed) {
+      _securityTimer?.cancel();
+      securityState = RelaySecurityState.ready;
+      status = 'Secure chat with $remoteName is ready.';
+    }
+  }
+
+  Future<void> _endForSecurityFailure() async {
+    final connection = _connection;
+    if (connection != null) {
+      _finishChat(RelayChatEndReason.securityFailed, connection);
+    }
+  }
+
+  void _finishChat(RelayChatEndReason reason, RelayConnection connection) {
+    if (chatEndReason != null) return;
+    chatEndReason = reason;
+    _requestTimer?.cancel();
+    _securityTimer?.cancel();
+    _localEndRequested = false;
+    inChat = false;
+    isWaitingForAcceptance = false;
+    if (identical(_connection, connection)) _connection = null;
+    if (identical(_incomingConnection, connection)) _incomingConnection = null;
+    _secureSession?.close();
+    _secureSession = null;
+    securityState = reason == RelayChatEndReason.securityFailed
+        ? RelaySecurityState.failed
+        : RelaySecurityState.idle;
+    status = switch (reason) {
+      RelayChatEndReason.local => 'You ended this chat.',
+      RelayChatEndReason.remote => '$remoteName ended this chat.',
+      RelayChatEndReason.connectionLost => 'The connection was lost.',
+      RelayChatEndReason.securityFailed =>
+        'Encrypted session setup failed. The chat was closed.',
+    };
+    unawaited(_closeConnection(connection));
+    notifyListeners();
+  }
+
+  void _onConnectionEnded(RelayConnection connection, String message) {
+    if (_disposed || chatEndReason != null) return;
+    if (identical(_connection, connection) ||
+        identical(_incomingConnection, connection)) {
+      if (inChat) {
+        _finishChat(
+          _localEndRequested
+              ? RelayChatEndReason.local
+              : RelayChatEndReason.connectionLost,
+          connection,
+        );
+      } else {
+        _requestTimer?.cancel();
+        _connection = null;
+        _incomingConnection = null;
+        isWaitingForAcceptance = false;
+        _clearIncomingRequest();
+        requestState = RelayRequestState.failed;
+        errorMessage = message.contains('timed out')
+            ? message
+            : 'The nearby connection ended before chat started. Try again.';
+        status = errorMessage!;
+        notifyListeners();
+      }
+    }
+  }
+
+  String _roleLabel(String? role) => role == 'internet_helper'
+      ? 'Internet Helper'
+      : role == 'offline_user'
+      ? 'Offline User'
+      : 'Nearby person';
+
+  void _resetSecureState() {
+    _secureSession?.close();
+    _secureSession = null;
+    securityState = RelaySecurityState.idle;
+    _localKeyConfirmed = false;
+    _remoteKeyConfirmed = false;
+    _keyExchangeSend = null;
+    chatEndReason = null;
   }
 
   String? _bodyString(RelayEnvelope envelope, String key) {
@@ -464,23 +1005,38 @@ class RelayDemoController extends ChangeNotifier {
   String _friendlyError(Object error) {
     final value = error.toString().replaceFirst('Bad state: ', '');
     if (value.toLowerCase().contains('permission')) {
-      return 'Nearby permissions are needed to find and connect with helpers.';
+      return value.toLowerCase().contains('notification')
+          ? 'Allow notifications in Android Settings > Apps > OfflineRelay > Notifications, then enable Help Others again.'
+          : 'Nearby permissions are needed. Allow Nearby devices in Android Settings > Apps > OfflineRelay > Permissions, then try again.';
     }
     if (value.toLowerCase().contains('bluetooth')) {
       return 'Turn on Bluetooth to find and connect with nearby helpers.';
+    }
+    if (value.contains('Encoded envelope')) {
+      return 'Your name is too long for nearby connection setup. Use a shorter name and try again.';
+    }
+    if (value.contains('PlatformException')) {
+      if (value.toLowerCase().contains('timeout')) {
+        return 'The nearby connection timed out. Keep both phones close and try again.';
+      }
+      return 'The nearby connection could not complete. Check Bluetooth and try again.';
     }
     return value;
   }
 
   @override
   void dispose() {
+    _disposed = true;
+    _requestTimer?.cancel();
+    _securityTimer?.cancel();
+    _secureSession?.close();
     _discoveryTimer?.cancel();
     unawaited(_incomingSubscription?.cancel());
     unawaited(_availabilitySubscription?.cancel());
     unawaited(_acceptedSubscription?.cancel());
     unawaited(_discoverySubscription?.cancel());
     unawaited(_messageSubscription?.cancel());
-    unawaited(_transport.dispose());
+    unawaited(_transport.dispose().catchError((Object _) {}));
     super.dispose();
   }
 }

@@ -38,7 +38,9 @@ class NearbyScreen extends StatelessWidget {
           IconButton(
             tooltip: 'Search again',
             onPressed:
-                controller.isConnecting || controller.isWaitingForAcceptance
+                controller.isConnecting ||
+                    controller.isWaitingForAcceptance ||
+                    controller.hasIncomingRequest
                 ? null
                 : onSearch,
             icon: const Icon(Icons.refresh_rounded, color: RelayColors.green),
@@ -58,8 +60,8 @@ class NearbyScreen extends StatelessWidget {
         const SizedBox(height: 18),
         _IncomingRequestCard(
           name: controller.incomingPeerName ?? 'A nearby user',
-          onAccept: onAccept,
-          onReject: onReject,
+          onAccept: controller.isResponding ? null : onAccept,
+          onReject: controller.isResponding ? null : onReject,
         ),
       ],
       if (controller.isConnecting || controller.isWaitingForAcceptance) ...[
@@ -427,8 +429,8 @@ class _IncomingRequestCard extends StatelessWidget {
   });
 
   final String name;
-  final VoidCallback onAccept;
-  final VoidCallback onReject;
+  final VoidCallback? onAccept;
+  final VoidCallback? onReject;
 
   @override
   Widget build(BuildContext context) => Container(
