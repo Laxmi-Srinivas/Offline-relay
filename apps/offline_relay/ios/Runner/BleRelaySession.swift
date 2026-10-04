@@ -2,7 +2,7 @@ import CoreBluetooth
 import Flutter
 import Foundation
 
-/// Foreground product adapter derived from the validated diagnostic sessions.
+/// Product adapter derived from the validated diagnostic sessions.
 /// DATA write/notify + ACK read/write implement main's duplex transport.
 final class BleRelaySession: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, CBPeripheralManagerDelegate {
   private enum Role { case none, central, peripheral }
@@ -63,14 +63,51 @@ final class BleRelaySession: NSObject, CBCentralManagerDelegate, CBPeripheralDel
   }
   private func fail(_ reason: String) { emit(["event": "error", "message": reason]); stop(reason) }
 
-  func advertise(_ profile: [String: Any], result: @escaping FlutterResult) {
+  func advertise(_ profile: [String: Any], restorationIdentifier: String? = nil, result: @escaping FlutterResult) {
     guard active, role == .none else { result(error("Stop the current BLE role first")); return }
     do { localProfile = try BleProfile.validate(profile); profileBytes = try BleProfile.encode(profile) }
     catch { result(self.error(error.localizedDescription)); return }
     role = .peripheral; pendingStart = result
     powerAction = { [weak self] in self?.registerService() }
     deadline("Bluetooth readiness")
-    peripheral = CBPeripheralManager(delegate: self, queue: .main)
+    let options: [String: Any]? = restorationIdentifier.map { [CBPeripheralManagerOptionRestoreIdentifierKey: $0] }
+    peripheral = CBPeripheralManager(delegate: self, queue: .main, options: options)
+  }
+  func peripheralManager(_ manager: CBPeripheralManager, willRestoreState dictionary: [String: Any]) {
+    guard active, manager === peripheral, role == .peripheral else { return }
+    let restored = (dictionary[CBPeripheralManagerRestoredStateServicesKey] as? [CBMutableService])?
+      .first(where: { $0.uuid == CBUUID(string: BleFraming.service) })
+    let characteristics = restored?.characteristics ?? []
+    let data = characteristics.first(where: { $0.uuid == CBUUID(string: BleFraming.data) }) as? CBMutableCharacteristic
+    let ack = characteristics.first(where: { $0.uuid == CBUUID(string: BleFraming.ack) }) as? CBMutableCharacteristic
+    let profile = characteristics.first(where: { $0.uuid == CBUUID(string: BleProfile.characteristic) }) as? CBMutableCharacteristic
+    // Wire IDs, incomplete transfers, request correlation, and Dart connections
+    // are not process-persistent. Invalidate restored live links instead of
+    // pretending their in-flight chat can resume with reset ACK/message IDs.
+    guard let service = restored, let data = data, let ack = ack, let profile = profile,
+      data.properties.contains(.write), data.properties.contains(.notify),
+      ack.properties.contains(.read), ack.properties.contains(.write),
+      profile.properties.contains(.read), data.subscribedCentrals?.isEmpty != false else {
+      powerAction = { [weak self] in
+        guard let self = self else { return }
+        self.peripheral?.removeAllServices(); self.registerService()
+      }
+      log("restoration_rebuild availability only; old chat invalidated")
+      return
+    }
+    self.service = service; dataCharacteristic = data; ackCharacteristic = ack; profileCharacteristic = profile
+    powerAction = { [weak self] in
+      guard let self = self, let manager = self.peripheral else { return }
+      self.clear("Bluetooth readiness")
+      if manager.isAdvertising {
+        self.pendingStart?(nil); self.pendingStart = nil
+      } else {
+        self.deadline("advertising start")
+        manager.startAdvertising([CBAdvertisementDataServiceUUIDsKey: [CBUUID(string: BleFraming.service)],
+          CBAdvertisementDataLocalNameKey: BleProfile.advertisedName(self.localProfile)])
+      }
+    }
+    log("restoration_adopted published services")
   }
   private func registerService() {
     clear("Bluetooth readiness")

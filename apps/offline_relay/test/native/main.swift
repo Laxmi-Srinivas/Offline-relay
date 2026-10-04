@@ -57,3 +57,33 @@ check(BleProfile.discoveryPeer(id: "x", name: "Other device") == nil, "ignore un
 let unicode = BleProfile.advertisedName(["label": "👩🏽‍💻名名前", "metadata": ["role": "internet_helper"]])
 check(unicode.utf8.count <= 10 && unicode.hasPrefix("ORH:"), "UTF-8 safe trimming")
 print("PASS: product arbitrary bytes/envelopes, validated framing, ACKs, invalid order, duplex state, profile discovery/encoding")
+
+// Actual native replay-state logic; radio restoration still requires devices.
+var helperState = BleHelperState()
+check(helperState.availabilityEvent["enabled"] as? Bool == false, "helper disabled initially")
+helperState.profile = profile
+helperState.enabled = true
+check(helperState.availabilityEvent["displayName"] as? String == "Helper long name", "helper name replay")
+helperState.incoming(["event": "incomingConnection", "connectionId": "helper-link", "peer": ["id": "nearby"]])
+let request = try JSONSerialization.data(withJSONObject: ["version": 1, "id": "request-1", "type": "connection_request", "body": ["name": "Avery"]])
+helperState.receive(request, retainChat: false)
+check(helperState.request == request && helperState.peerName == "Avery", "pending request replay")
+let reject = try JSONSerialization.data(withJSONObject: ["version": 1, "id": "reject-1", "type": "connection_reject", "body": ["requestId": "request-1"]])
+check(helperState.sent(reject) == nil && helperState.enabled && helperState.request == nil, "reject preserves enabled intent")
+helperState.clearConnection()
+check(helperState.enabled && helperState.connectionID == nil, "close preserves availability for restart")
+helperState.incoming(["event": "incomingConnection", "connectionId": "helper-link-2", "peer": ["id": "nearby"]])
+helperState.receive(request, retainChat: false)
+let wrongAccept = try JSONSerialization.data(withJSONObject: ["version": 1, "type": "connection_accept", "body": ["requestId": "wrong"]])
+check(helperState.sent(wrongAccept) == nil && helperState.request != nil, "reject unrelated acceptance")
+let accept = try JSONSerialization.data(withJSONObject: ["version": 1, "type": "connection_accept", "body": ["requestId": "request-1"]])
+let accepted = helperState.sent(accept)
+check(accepted?["connectionId"] as? String == "helper-link-2" && accepted?["requestId"] as? String == "request-1", "accepted identifiers")
+check(accepted?["peerName"] as? String == "Avery" && helperState.request == nil && helperState.accepted != nil, "accepted snapshot replay")
+let chat = try JSONSerialization.data(withJSONObject: ["version": 1, "type": "chat", "body": ["text": "Background message"]])
+for _ in 0..<40 { helperState.receive(chat, retainChat: true) }
+check(helperState.unreadMessages.count == 32, "bounded detached chat buffer")
+check(helperState.drainUnreadMessages().count == 32 && helperState.unreadMessages.isEmpty, "drain replay once")
+helperState.enabled = false; helperState.clearConnection()
+check(helperState.availabilityEvent["enabled"] as? Bool == false && helperState.accepted == nil, "disable resets replay")
+print("PASS: native helper availability/request/acceptance replay, reject/close retention, bounded detached messages, disable")

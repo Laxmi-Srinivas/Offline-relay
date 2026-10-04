@@ -8,8 +8,10 @@ final class BleRelayChannels: NSObject, FlutterStreamHandler {
   private var session: BleRelaySession?
   private var methods: FlutterMethodChannel!
   private var events: FlutterEventChannel!
+  private let helper: BleHelperAvailability
 
-  init(messenger: FlutterBinaryMessenger) {
+  init(messenger: FlutterBinaryMessenger, helper: BleHelperAvailability) {
+    self.helper = helper
     super.init()
     methods = FlutterMethodChannel(name: "dev.offlinerelay/ble/methods", binaryMessenger: messenger)
     events = FlutterEventChannel(name: "dev.offlinerelay/ble/events", binaryMessenger: messenger)
@@ -17,9 +19,12 @@ final class BleRelayChannels: NSObject, FlutterStreamHandler {
     methods.setMethodCallHandler { [weak self] call, result in self?.handle(call, result: result) }
     NotificationCenter.default.addObserver(self, selector: #selector(background),
       name: UIApplication.didEnterBackgroundNotification, object: nil)
+    NotificationCenter.default.addObserver(self, selector: #selector(foreground),
+      name: UIApplication.didBecomeActiveNotification, object: nil)
   }
   deinit { NotificationCenter.default.removeObserver(self) }
   @objc private func background() { session?.stop("application left foreground"); session = nil }
+  @objc private func foreground() { helper.replay() }
   private func current() -> BleRelaySession {
     if let session = session { return session }
     let next = BleRelaySession { [weak self] event in
@@ -35,7 +40,7 @@ final class BleRelayChannels: NSObject, FlutterStreamHandler {
     switch call.method {
     case "advertise":
       guard let profile = args["profile"] as? [String: Any] else { invalid("profile"); return }
-      current().advertise(profile, result: result)
+      helper.advertise(profile, result: result)
     case "startDiscovery": current().startDiscovery(result)
     case "stopDiscovery": if let session = session { session.stopDiscovery(result) } else { result(nil) }
     case "connect":
@@ -44,15 +49,22 @@ final class BleRelayChannels: NSObject, FlutterStreamHandler {
     case "send":
       guard let id = args["connectionId"] as? String else { invalid("connectionId"); return }
       guard let bytes = args["message"] as? FlutterStandardTypedData else { invalid("message bytes"); return }
-      current().send(id, bytes: bytes.data, result: result)
+      if helper.owns(id) { helper.send(id, bytes: bytes.data, result: result) }
+      else { current().send(id, bytes: bytes.data, result: result) }
     case "close":
       guard let id = args["connectionId"] as? String else { invalid("connectionId"); return }
-      if let session = session { session.close(id, result: result) } else { result(nil) }
-    case "stopAdvertising": if let session = session { session.stopAdvertising(result) } else { result(nil) }
+      if helper.owns(id) { helper.close(id, result: result) }
+      else if let session = session { session.close(id, result: result) } else { result(nil) }
+    case "stopAdvertising": helper.stopAdvertising(result)
+    case "stopHelper": helper.stopHelper(result)
     case "dispose": session?.stop("transport disposed"); session = nil; result(nil)
     default: result(FlutterMethodNotImplemented)
     }
   }
-  func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? { sink = events; return nil }
-  func onCancel(withArguments arguments: Any?) -> FlutterError? { sink = nil; return nil }
+  func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
+    sink = events
+    helper.attach { [weak self] event in self?.sink?(event) }
+    return nil
+  }
+  func onCancel(withArguments arguments: Any?) -> FlutterError? { helper.detach(); sink = nil; return nil }
 }

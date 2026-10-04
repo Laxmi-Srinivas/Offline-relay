@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:relay_transport/relay_transport.dart';
 
+import 'transport/helper_availability.dart';
+
 enum RelayUserRole { offlineUser, internetHelper }
 
 class RelayConversationMessage {
@@ -24,6 +26,17 @@ class RelayDemoController extends ChangeNotifier {
       _onIncomingConnection,
       onError: (Object error) => _setStatus('Connection error: $error'),
     );
+    final helperControl = _transport is HelperAvailabilityControl
+        ? _transport as HelperAvailabilityControl
+        : null;
+    if (helperControl != null) {
+      _availabilitySubscription = helperControl.availabilityStates.listen(
+        _onHelperAvailability,
+      );
+      _acceptedSubscription = helperControl.acceptedConnections.listen(
+        _onHelperAccepted,
+      );
+    }
   }
 
   final RelayTransport _transport;
@@ -46,6 +59,8 @@ class RelayDemoController extends ChangeNotifier {
   RelayConnection? _incomingConnection;
   String? _outgoingRequestId;
   StreamSubscription<RelayConnection>? _incomingSubscription;
+  StreamSubscription<HelperAvailabilityState>? _availabilitySubscription;
+  StreamSubscription<HelperAcceptedEvent>? _acceptedSubscription;
   StreamSubscription<RelayPeer>? _discoverySubscription;
   StreamSubscription<Uint8List>? _messageSubscription;
 
@@ -100,7 +115,21 @@ class RelayDemoController extends ChangeNotifier {
     peers.clear();
     await _transport.advertise(localProfile);
     isOffering = true;
-    status = 'You are offering help. Keep OfflineRelay open.';
+    status = 'Help Others is on. You can leave OfflineRelay running.';
+    notifyListeners();
+  }
+
+  Future<void> stopOfferingHelp() async {
+    final helperControl = _transport is HelperAvailabilityControl
+        ? _transport as HelperAvailabilityControl
+        : null;
+    if (helperControl != null) {
+      await helperControl.stopHelperAvailability();
+    } else {
+      await _transport.stopAdvertising();
+    }
+    isOffering = false;
+    status = 'Help Others is off.';
     notifyListeners();
   }
 
@@ -170,9 +199,12 @@ class RelayDemoController extends ChangeNotifier {
       ).encode(),
     );
     _clearIncomingRequest();
+    _incomingConnection = null;
     await connection.close();
-    isOffering = false;
-    status = 'Connection request declined.';
+    isOffering = role == RelayUserRole.internetHelper;
+    status = isOffering
+        ? 'Connection declined. You are still offering help.'
+        : 'Connection declined.';
     notifyListeners();
   }
 
@@ -204,6 +236,12 @@ class RelayDemoController extends ChangeNotifier {
     _messageSubscription = null;
     if (connection != null) await connection.close();
     await _transport.stopAdvertising();
+    final helperControl = _transport is HelperAvailabilityControl
+        ? _transport as HelperAvailabilityControl
+        : null;
+    if (role == RelayUserRole.internetHelper && helperControl != null) {
+      await helperControl.stopHelperAvailability();
+    }
     peers.clear();
     messages.clear();
     _clearIncomingRequest();
@@ -231,24 +269,65 @@ class RelayDemoController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void _onHelperAvailability(HelperAvailabilityState state) {
+    role = RelayUserRole.internetHelper;
+    if (state.displayName != null && state.displayName!.isNotEmpty) {
+      displayName = state.displayName!;
+    }
+    isOffering = state.enabled;
+    if (!inChat && !hasIncomingRequest) {
+      status = state.enabled
+          ? 'Help Others is on. You can leave OfflineRelay running.'
+          : 'Help Others is off.';
+    }
+    notifyListeners();
+  }
+
+  void _onHelperAccepted(HelperAcceptedEvent event) {
+    final pending = _incomingConnection;
+    if (pending != null) {
+      _connection = pending;
+      _incomingConnection = null;
+    }
+    remoteName = event.peerName;
+    incomingPeerName = null;
+    incomingRequestId = null;
+    isOffering = false;
+    isWaitingForAcceptance = false;
+    inChat = true;
+    status = 'Connected with $remoteName.';
+    notifyListeners();
+  }
+
   void _listenForMessages(RelayConnection connection) {
     unawaited(_messageSubscription?.cancel());
     _messageSubscription = connection.messages.listen(
       (bytes) => _onEnvelope(connection, bytes),
       onError: (Object error) {
-        inChat = false;
-        isWaitingForAcceptance = false;
+        if (!_releaseEndedConnection(connection)) return;
         _setStatus('Connection ended: $error');
       },
       onDone: () {
-        if (identical(_connection, connection) ||
-            identical(_incomingConnection, connection)) {
-          inChat = false;
-          isWaitingForAcceptance = false;
+        if (_releaseEndedConnection(connection)) {
           _setStatus('Connection closed.');
         }
       },
     );
+  }
+
+  // A closed helper link must not block the next availability request. Ignore
+  // late callbacks from a superseded connection so they cannot clear a new one.
+  bool _releaseEndedConnection(RelayConnection connection) {
+    final current = identical(_connection, connection);
+    final incoming = identical(_incomingConnection, connection);
+    if (!current && !incoming) return false;
+    if (current) _connection = null;
+    if (incoming) _incomingConnection = null;
+    _clearIncomingRequest();
+    _outgoingRequestId = null;
+    inChat = false;
+    isWaitingForAcceptance = false;
+    return true;
   }
 
   void _onEnvelope(RelayConnection connection, Uint8List bytes) {
@@ -297,8 +376,8 @@ class RelayDemoController extends ChangeNotifier {
         notifyListeners();
       case RelayMessageType.serviceRequest:
       case RelayMessageType.serviceResponse:
-        // Reserved by the shared transport contract; this MVP treats them as
-        // unsupported messages and keeps the chat flow text-only.
+      // Reserved by the shared transport contract; this MVP treats them as
+      // unsupported messages and keeps the chat flow text-only.
     }
   }
 
@@ -340,6 +419,8 @@ class RelayDemoController extends ChangeNotifier {
   @override
   void dispose() {
     unawaited(_incomingSubscription?.cancel());
+    unawaited(_availabilitySubscription?.cancel());
+    unawaited(_acceptedSubscription?.cancel());
     unawaited(_discoverySubscription?.cancel());
     unawaited(_messageSubscription?.cancel());
     unawaited(_transport.dispose());

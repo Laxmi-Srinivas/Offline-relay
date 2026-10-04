@@ -127,6 +127,8 @@ class _OfflineRelayAppState extends State<OfflineRelayApp> {
               : () => _run(
                   c.role == RelayUserRole.offlineUser
                       ? c.findNearbyHelpers
+                      : c.isOffering
+                      ? c.stopOfferingHelp
                       : c.offerHelp,
                 ),
           icon: Icon(
@@ -137,7 +139,9 @@ class _OfflineRelayAppState extends State<OfflineRelayApp> {
           label: Text(
             c.role == RelayUserRole.offlineUser
                 ? 'Find Nearby Helpers'
-                : 'Offer Help',
+                : c.isOffering
+                ? 'Disable Help Others'
+                : 'Enable Help Others',
           ),
         ),
         const SizedBox(height: 12),
@@ -148,7 +152,7 @@ class _OfflineRelayAppState extends State<OfflineRelayApp> {
             child: ListTile(
               leading: Icon(Icons.bluetooth_searching),
               title: Text('Advertising for nearby users'),
-              subtitle: Text('Keep this screen open to receive a request.'),
+              subtitle: Text('You can leave OfflineRelay while available.'),
             ),
           ),
         ],
@@ -263,7 +267,10 @@ class _OfflineRelayAppState extends State<OfflineRelayApp> {
     );
   }
 
-  Widget _messageBubble(BuildContext context, RelayConversationMessage message) {
+  Widget _messageBubble(
+    BuildContext context,
+    RelayConversationMessage message,
+  ) {
     return Align(
       alignment: message.fromLocalUser
           ? Alignment.centerRight
@@ -289,7 +296,6 @@ class _OfflineRelayAppState extends State<OfflineRelayApp> {
     await _run(() => _controller.sendChat(text));
     _chatController.clear();
   }
-
 }
 
 class _StatusCard extends StatelessWidget {
