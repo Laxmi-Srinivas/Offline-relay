@@ -1,0 +1,59 @@
+name: Publish Onya presentation
+
+# The initial push happens ONLY after the user approves the finished preview.
+# Later website-branch pushes also publish; main and mobile branches never trigger.
+on:
+  push:
+    branches: [feat/onya-presentation]
+    paths:
+      - website/onya/**
+      - .github/workflows/onya-pages.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: onya-github-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.ref == 'refs/heads/feat/onya-presentation'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: read
+    steps:
+      - name: Check out website source
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          sparse-checkout: website/onya
+      - name: Check static presentation
+        run: python3 website/onya/tests/static_check.py
+      - name: Build only the public website output
+        run: |
+          python3 website/onya/package_site.py --output "$RUNNER_TEMP/onya.zip"
+          mkdir -p "$RUNNER_TEMP/onya-site"
+          python3 -m zipfile -e "$RUNNER_TEMP/onya.zip" "$RUNNER_TEMP/onya-site"
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+      - name: Upload only the website build output
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: ${{ runner.temp }}/onya-site
+
+  deploy:
+    if: github.ref == 'refs/heads/feat/onya-presentation'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Publish approved presentation
+        id: deployment
+        uses: actions/deploy-pages@v4
