@@ -21,7 +21,10 @@ class RelayConversationMessage {
 
 /// Minimal in-memory app flow layered over the platform transport contract.
 class RelayDemoController extends ChangeNotifier {
-  RelayDemoController(this._transport) {
+  RelayDemoController(
+    this._transport, {
+    this.discoveryDuration = const Duration(seconds: 12),
+  }) {
     _incomingSubscription = _transport.incomingConnections.listen(
       _onIncomingConnection,
       onError: (Object error) => _setStatus('Connection error: $error'),
@@ -40,6 +43,7 @@ class RelayDemoController extends ChangeNotifier {
   }
 
   final RelayTransport _transport;
+  final Duration discoveryDuration;
   final peers = <RelayPeer>[];
   final messages = <RelayConversationMessage>[];
 
@@ -54,6 +58,8 @@ class RelayDemoController extends ChangeNotifier {
   bool isConnecting = false;
   bool isWaitingForAcceptance = false;
   bool inChat = false;
+  bool isSearchComplete = false;
+  String? errorMessage;
 
   RelayConnection? _connection;
   RelayConnection? _incomingConnection;
@@ -63,9 +69,13 @@ class RelayDemoController extends ChangeNotifier {
   StreamSubscription<HelperAcceptedEvent>? _acceptedSubscription;
   StreamSubscription<RelayPeer>? _discoverySubscription;
   StreamSubscription<Uint8List>? _messageSubscription;
+  Timer? _discoveryTimer;
 
   bool get hasIncomingRequest =>
       _incomingConnection != null && incomingRequestId != null;
+
+  bool get noPeopleFound =>
+      isSearchComplete && peers.isEmpty && errorMessage == null;
 
   RelayProfile get localProfile => RelayProfile(
     id: 'local-${DateTime.now().microsecondsSinceEpoch}',
@@ -85,9 +95,12 @@ class RelayDemoController extends ChangeNotifier {
       throw StateError('Choose Offline User to find helpers.');
     }
     await _discoverySubscription?.cancel();
+    _discoveryTimer?.cancel();
     peers.clear();
     isOffering = false;
     isDiscovering = true;
+    isSearchComplete = false;
+    errorMessage = null;
     status = 'Looking for nearby Internet Helpers…';
     notifyListeners();
     _discoverySubscription = _transport.discover().listen(
@@ -99,10 +112,24 @@ class RelayDemoController extends ChangeNotifier {
         }
       },
       onError: (Object error) {
+        _discoveryTimer?.cancel();
         isDiscovering = false;
+        isSearchComplete = true;
+        errorMessage = _friendlyError(error);
         _setStatus('Discovery stopped: $error');
       },
     );
+    _discoveryTimer = Timer(discoveryDuration, () {
+      if (!isDiscovering) return;
+      isDiscovering = false;
+      isSearchComplete = true;
+      status = peers.isEmpty
+          ? 'No one found nearby.'
+          : '${peers.length} nearby helper${peers.length == 1 ? '' : 's'} found.';
+      unawaited(_discoverySubscription?.cancel());
+      _discoverySubscription = null;
+      notifyListeners();
+    });
   }
 
   Future<void> offerHelp() async {
@@ -111,7 +138,10 @@ class RelayDemoController extends ChangeNotifier {
       throw StateError('Choose Internet Helper to offer help.');
     }
     await _discoverySubscription?.cancel();
+    _discoveryTimer?.cancel();
     isDiscovering = false;
+    isSearchComplete = false;
+    errorMessage = null;
     peers.clear();
     await _transport.advertise(localProfile);
     isOffering = true;
@@ -129,6 +159,7 @@ class RelayDemoController extends ChangeNotifier {
       await _transport.stopAdvertising();
     }
     isOffering = false;
+    errorMessage = null;
     status = 'Help Others is off.';
     notifyListeners();
   }
@@ -136,6 +167,8 @@ class RelayDemoController extends ChangeNotifier {
   Future<void> connectTo(RelayPeer peer) async {
     _requireName();
     isConnecting = true;
+    errorMessage = null;
+    _discoveryTimer?.cancel();
     status = 'Connecting to ${peer.label}…';
     notifyListeners();
     try {
@@ -158,6 +191,15 @@ class RelayDemoController extends ChangeNotifier {
       if (isWaitingForAcceptance) {
         status = 'Connection request sent to ${peer.label}.';
       }
+    } catch (error) {
+      isDiscovering = false;
+      isSearchComplete = true;
+      _discoveryTimer?.cancel();
+      await _discoverySubscription?.cancel();
+      _discoverySubscription = null;
+      errorMessage = _friendlyError(error);
+      status = 'Couldn’t connect to ${peer.label}.';
+      rethrow;
     } finally {
       isConnecting = false;
       notifyListeners();
@@ -225,7 +267,20 @@ class RelayDemoController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void reportError(Object error) {
+    errorMessage = _friendlyError(error);
+    status = errorMessage!;
+    notifyListeners();
+  }
+
+  void clearError() {
+    if (errorMessage == null) return;
+    errorMessage = null;
+    notifyListeners();
+  }
+
   Future<void> returnToNearby() async {
+    _discoveryTimer?.cancel();
     await _discoverySubscription?.cancel();
     _discoverySubscription = null;
     final connection = _connection ?? _incomingConnection;
@@ -247,10 +302,12 @@ class RelayDemoController extends ChangeNotifier {
     remoteName = null;
     _outgoingRequestId = null;
     isDiscovering = false;
+    isSearchComplete = false;
     isOffering = false;
     isWaitingForAcceptance = false;
     inChat = false;
     status = 'Choose Find Nearby Helpers or Offer Help.';
+    errorMessage = null;
     notifyListeners();
   }
 
@@ -404,8 +461,20 @@ class RelayDemoController extends ChangeNotifier {
     notifyListeners();
   }
 
+  String _friendlyError(Object error) {
+    final value = error.toString().replaceFirst('Bad state: ', '');
+    if (value.toLowerCase().contains('permission')) {
+      return 'Nearby permissions are needed to find and connect with helpers.';
+    }
+    if (value.toLowerCase().contains('bluetooth')) {
+      return 'Turn on Bluetooth to find and connect with nearby helpers.';
+    }
+    return value;
+  }
+
   @override
   void dispose() {
+    _discoveryTimer?.cancel();
     unawaited(_incomingSubscription?.cancel());
     unawaited(_availabilitySubscription?.cancel());
     unawaited(_acceptedSubscription?.cancel());

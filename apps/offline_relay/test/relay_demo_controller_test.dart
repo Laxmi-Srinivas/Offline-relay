@@ -116,6 +116,27 @@ void main() {
     expect(controller.isOffering, isFalse);
     await _dispose(controller);
   });
+
+  test(
+    'discovery reports an empty result after its real scan window',
+    () async {
+      final transport = _FakeTransport();
+      final controller = RelayDemoController(
+        transport,
+        discoveryDuration: const Duration(milliseconds: 10),
+      );
+      controller.updateProfile(name: 'Avery', role: RelayUserRole.offlineUser);
+
+      await controller.findNearbyHelpers();
+      expect(controller.isDiscovering, isTrue);
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      expect(controller.isDiscovering, isFalse);
+      expect(controller.noPeopleFound, isTrue);
+      expect(controller.peers, isEmpty);
+      await _dispose(controller);
+    },
+  );
 }
 
 final _helperPeer = RelayPeer(
