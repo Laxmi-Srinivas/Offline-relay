@@ -1,7 +1,11 @@
 # Architecture direction
 
-Status: placeholder host and pure Dart contract implemented; adapters and
-physical-device validation pending.
+This document records the original architecture direction, including future LAN
+plans. The Android BLE chat and background-helper implementation now exist;
+LAN/Internet relay actions remain unimplemented. For the current source-based
+architecture, trust boundaries and security verification, see
+[security work record](../security/README.md). Historical contributor device results
+and Security's independent checks must be read separately.
 
 ```text
 Flutter UI

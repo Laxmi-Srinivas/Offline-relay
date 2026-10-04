@@ -50,7 +50,8 @@ Ran `python docs/security/check_history_secrets.py`: 225 unique text blobs reach
 from all locally available refs checked; 28 binary blobs skipped; no oversized blobs;
 zero candidates for the script's five pattern families. Values are never printed,
 and Git is read-only. No network scanner or upload is involved. A later rerun may
-have larger counts because new audit/code commits become reachable.
+have larger counts because new audit/code commits become reachable. Rerun at
+`dac5422` checked 240 text blobs with the same 28 binary skips and zero candidates.
 
 This is limited triage, not proof that history contains no secrets. Unknown token
 formats, encoded/binary secrets, ignored files, unreferenced objects and unfetched

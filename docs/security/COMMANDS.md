@@ -121,3 +121,21 @@ Further results will be appended after execution, not predicted.
 - Read public primary Gradle/Dart/Flutter/JetBrains/GitHub advisory pages; compared
   declared toolchain/locked package evidence. No source or user data uploaded.
   Scope and coverage gaps are recorded in AUDIT.md; no vulnerability-free claim.
+
+### Final documentation and preservation check
+
+- Background hardening and its verification/audit records committed as `dac5422`.
+- Reran the read-only secret triage at `dac5422`: 240 text blobs, 28 binary blobs
+  skipped, no large blobs and zero candidates. These are the counts at that commit,
+  not a guarantee about all credentials or future commits.
+- Root/app READMEs and architecture introduction were corrected to distinguish
+  implemented Android chat/background availability from scaffolds/plans and from
+  contributor device evidence. Prior device test records remain intact.
+- Tool-generated desktop line-ending changes had zero semantic diff. Git's normal
+  index normalization on Security cleared their modified status without including
+  desktop changes in a commit. No original-checkout file was restored or edited.
+- Read-only status/ref checks confirmed original checkout clean on
+  feat/native-android-continuity `cbb1ed63933485756bb6214e9ac6d3f5d0376ad9`, local
+  main `6128998d6ea22e99710cb77e4abe09e5747cfbac`, origin/ios-mvp
+  `887bc13467a3aecebf3dc20792e190f022e72e5c`, origin/main
+  `a504c3fa26ab24a9218693fdfe9004cbe1aad758`. No push or PR was performed.
