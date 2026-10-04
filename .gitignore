@@ -1,0 +1,12 @@
+# Local toolchains/caches must never be committed.
+.tools/
+**/.dart_tool/
+**/build/
+**/.flutter-plugins-dependencies
+**/local.properties
+*.jks
+*.keystore
+key.properties
+.env
+.env.*
+!.env.example

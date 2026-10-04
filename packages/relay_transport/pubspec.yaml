@@ -1,0 +1,6 @@
+name: relay_transport
+description: Transport-independent boundary for OfflineRelay experiments.
+version: 0.0.1
+publish_to: none
+environment:
+  sdk: '>=3.10.0 <4.0.0'
