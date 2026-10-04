@@ -129,3 +129,30 @@ for object: [String: Any] in [
   check(helperState.receive(invalidBytes, retainChat: false) == nil, "invalid/non-request envelope cannot notify")
 }
 print("PASS: notification deduplication, authorization/foreground policy, resolution/cleanup, stale callbacks, malformed requests")
+
+// Registry isolates simultaneous central links without involving helper services.
+final class TestCentralLink {
+  var receiver = BleMessageReceiver()
+  var queued = [Data]()
+}
+let links = BleCentralConnections<TestCentralLink>()
+let linkB = TestCentralLink(), linkC = TestCentralLink(), linkPending = TestCentralLink()
+let tokenB = UUID(), tokenC = UUID(), tokenPending = UUID()
+check(links.insert(peerID: "B", session: linkB, token: tokenB), "register B")
+check(links.insert(peerID: "C", session: linkC, token: tokenC), "register C concurrently")
+check(!links.insert(peerID: "B", session: linkC, token: UUID()), "duplicate peer rejected")
+links.bind(peerID: "B", token: tokenB, connectionID: "connection-B")
+links.bind(peerID: "C", token: tokenC, connectionID: "connection-C")
+check(links.session(connectionID: "connection-B") === linkB && links.session(connectionID: "connection-C") === linkC, "route exact connection IDs")
+_ = try linkB.receiver.receive(frames[0]); linkB.queued.append(frames[1])
+check(!linkC.receiver.isReceiving && linkC.queued.isEmpty, "per-link frame and queue state isolated")
+check(links.remove(peerID: "B", token: UUID()) == nil, "stale removal ignored")
+check(links.remove(peerID: "B", token: tokenB) === linkB, "remove B only")
+check(links.session(connectionID: "connection-C") === linkC, "C survives B rejection/disconnect")
+check(links.insert(peerID: "D", session: linkPending, token: tokenPending), "connecting D")
+check(links.takePending().first === linkPending, "cancel unresolved connecting links")
+check(links.session(connectionID: "connection-C") === linkC, "pending cancellation preserves winner")
+links.bind(peerID: "D", token: tokenPending, connectionID: "late-D")
+check(links.session(connectionID: "late-D") == nil, "late readiness cannot restore removed loser")
+check(links.takeAll().count == 1 && links.entries.isEmpty, "dispose/background cleans registry")
+print("PASS: concurrent native central registry, independent frame/queue state, connection routing, stale callback protection, pending cancellation")

@@ -5,7 +5,8 @@ import UIKit
 /// Same method/event map contract as main's Android MainActivity.
 final class BleRelayChannels: NSObject, FlutterStreamHandler {
   private var sink: FlutterEventSink?
-  private var session: BleRelaySession?
+  private var session: BleRelaySession? // Discovery/profile probes only.
+  private let connections = BleCentralConnections<BleRelaySession>()
   private var methods: FlutterMethodChannel!
   private var events: FlutterEventChannel!
   private let helper: BleHelperAvailability
@@ -23,7 +24,42 @@ final class BleRelayChannels: NSObject, FlutterStreamHandler {
       name: UIApplication.didBecomeActiveNotification, object: nil)
   }
   deinit { NotificationCenter.default.removeObserver(self) }
-  @objc private func background() { session?.stop("application left foreground"); session = nil }
+  @objc private func background() { stopCentral("application left foreground") }
+  private func stopCentral(_ reason: String) {
+    session?.stop(reason); session = nil
+    for connection in Array(connections.entries.values) { connection.session.stop(reason) }
+    _ = connections.takeAll()
+  }
+  private func connect(_ id: String, result: @escaping FlutterResult) {
+    guard let peer = session?.discoveredPeer(id) else {
+      result(FlutterError(code: "ble_error", message: "Nearby peer expired; start discovery first", details: nil)); return
+    }
+    let token = UUID()
+    let next = BleRelaySession { [weak self] event in
+      guard let self = self, self.connections.contains(peerID: id, token: token) else { return }
+      var scoped = event
+      if let connectionID = self.connections.entries[id]?.connectionID { scoped["connectionId"] = connectionID }
+      // An individual link ending must not stop unrelated discovery/requests.
+      if event["event"] as? String == "sessionEnded" {
+        self.connections.remove(peerID: id, token: token)
+      } else if event["event"] as? String != "error" || scoped["connectionId"] != nil {
+        self.sink?(scoped)
+      }
+    }
+    guard connections.insert(peerID: id, session: next, token: token) else {
+      result(FlutterError(code: "ble_error", message: "A request to this helper is already pending", details: nil)); return
+    }
+    next.connectPeer(id, peer: peer) { [weak self, weak next] value in
+      guard let self = self, self.connections.contains(peerID: id, token: token) else {
+        next?.stop("cancelled pending connection")
+        result(FlutterError(code: "ble_error", message: "Connection cancelled", details: nil)); return
+      }
+      if let map = value as? [String: Any], let connectionID = map["connectionId"] as? String {
+        self.connections.bind(peerID: id, token: token, connectionID: connectionID)
+      } else { self.connections.remove(peerID: id, token: token) }
+      result(value)
+    }
+  }
   @objc private func foreground() { helper.replay() }
   private func current() -> BleRelaySession {
     if let session = session { return session }
@@ -42,22 +78,27 @@ final class BleRelayChannels: NSObject, FlutterStreamHandler {
       guard let profile = args["profile"] as? [String: Any] else { invalid("profile"); return }
       helper.advertise(profile, result: result)
     case "startDiscovery": current().startDiscovery(result)
-    case "stopDiscovery": if let session = session { session.stopDiscovery(result) } else { result(nil) }
+    case "stopDiscovery":
+      // Discovery cancellation marks winner selection / leaving Nearby. Bound
+      // connect futures that have not produced a Dart connection yet are cancelled.
+      for pending in connections.takePending() { pending.stop("outgoing request cancelled") }
+      if let session = session { session.stopDiscovery(result) } else { result(nil) }
     case "connect":
       guard let id = args["peerId"] as? String else { invalid("peerId"); return }
-      current().connect(id, result: result)
+      connect(id, result: result)
     case "send":
       guard let id = args["connectionId"] as? String else { invalid("connectionId"); return }
       guard let bytes = args["message"] as? FlutterStandardTypedData else { invalid("message bytes"); return }
       if helper.owns(id) { helper.send(id, bytes: bytes.data, result: result) }
-      else { current().send(id, bytes: bytes.data, result: result) }
+      else if let connection = connections.session(connectionID: id) { connection.send(id, bytes: bytes.data, result: result) }
+      else { result(FlutterError(code: "connection_missing", message: "Connection is unavailable", details: nil)) }
     case "close":
       guard let id = args["connectionId"] as? String else { invalid("connectionId"); return }
       if helper.owns(id) { helper.close(id, result: result) }
-      else if let session = session { session.close(id, result: result) } else { result(nil) }
+      else if let connection = connections.session(connectionID: id) { connection.close(id, result: result) } else { result(nil) }
     case "stopAdvertising": helper.stopAdvertising(result)
     case "stopHelper": helper.stopHelper(result)
-    case "dispose": session?.stop("transport disposed"); session = nil; result(nil)
+    case "dispose": stopCentral("transport disposed"); result(nil)
     default: result(FlutterMethodNotImplemented)
     }
   }

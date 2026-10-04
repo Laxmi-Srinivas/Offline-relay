@@ -24,6 +24,7 @@
 		B1E100000000000000000006 /* BleHelperState.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1E000000000000000000006 /* BleHelperState.swift */; };
 		B1E100000000000000000007 /* BleHelperAvailability.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1E000000000000000000007 /* BleHelperAvailability.swift */; };
 		B1E100000000000000000008 /* BleHelperNotifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1E000000000000000000008 /* BleHelperNotifications.swift */; };
+		B1E100000000000000000009 /* BleCentralConnections.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1E000000000000000000009 /* BleCentralConnections.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -75,6 +76,7 @@
 		B1E000000000000000000006 /* BleHelperState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BleHelperState.swift; sourceTree = "<group>"; };
 		B1E000000000000000000007 /* BleHelperAvailability.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BleHelperAvailability.swift; sourceTree = "<group>"; };
 		B1E000000000000000000008 /* BleHelperNotifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BleHelperNotifications.swift; sourceTree = "<group>"; };
+		B1E000000000000000000009 /* BleCentralConnections.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BleCentralConnections.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -140,6 +142,7 @@
 				74858FAE1ED2DC5600515810 /* AppDelegate.swift */,
 				B1E000000000000000000007 /* BleHelperAvailability.swift */,
 				B1E000000000000000000008 /* BleHelperNotifications.swift */,
+				B1E000000000000000000009 /* BleCentralConnections.swift */,
 				B1E000000000000000000006 /* BleHelperState.swift */,
 				B1E000000000000000000005 /* BleRelayChannels.swift */,
 				B1E000000000000000000004 /* BleRelaySession.swift */,
@@ -308,6 +311,7 @@
 				74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */,
 				B1E100000000000000000007 /* BleHelperAvailability.swift in Sources */,
 				B1E100000000000000000008 /* BleHelperNotifications.swift in Sources */,
+				B1E100000000000000000009 /* BleCentralConnections.swift in Sources */,
 				B1E100000000000000000006 /* BleHelperState.swift in Sources */,
 				B1E100000000000000000005 /* BleRelayChannels.swift in Sources */,
 				B1E100000000000000000004 /* BleRelaySession.swift in Sources */,

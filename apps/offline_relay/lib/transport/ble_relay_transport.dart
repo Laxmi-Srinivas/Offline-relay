@@ -158,6 +158,13 @@ final class BleRelayTransport
         }
         break;
       case 'error':
+        final connectionId = event['connectionId'];
+        if (connectionId is String) {
+          _connections
+              .remove(connectionId)
+              ?._finish(event['message']?.toString() ?? 'BLE error');
+          break;
+        }
         _scanning = false;
         final error = StateError(event['message']?.toString() ?? 'BLE error');
         for (final controller in List.of(_discoveries)) {

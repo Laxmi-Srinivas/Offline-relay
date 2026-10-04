@@ -1,8 +1,9 @@
 # OfflineRelay MVP host
 
-Nearby Users / connection approval / peer chat product flow is synchronized with
-main commit `a504c3fa26ab24a9218693fdfe9004cbe1aad758`, with a small shared
-controller cleanup fix for accepting a new helper request after Reject/disconnect. Shared Dart code stays
+Home / Nearby / Profile and chat UI is adapted from main commit
+`67acd0632eb1965482d7b745e06f1ef0c83b55f5`. The iOS controller retains multiple
+pending outgoing requests and first-accept-wins behavior instead of main's single
+outgoing request assumption. Shared Dart code stays
 platform-neutral. On `ios-mvp`, native CoreBluetooth implements both roles in
 `ios/Runner`; Android implementation files remain at this branch's prior checkpoint.
 
@@ -24,3 +25,7 @@ and has passed two-iPhone background discovery, pending-request replay, Accept/c
 Reject retention, and reconnect tests. Process restoration and force-quit behavior
 remain unvalidated. See [the helper availability record](../../docs/testing/ios-helper-availability.md)
 for supported behavior, platform limits, test results, and required device checks.
+
+See [the Phase 1 UI record](../../docs/testing/ios-phase-one-ui.md) for UI adaptations,
+preserved native behavior, automated checks, physical iPhone validation confirmation,
+and the three-iPhone regression checklist.

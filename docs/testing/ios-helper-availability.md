@@ -148,7 +148,7 @@ or central restoration ID is needed for this selected helper-only scope.
 Native helper tests now include BleHelperState.swift:
 
 ```sh
-xcrun swiftc apps/offline_relay/ios/Runner/BleFraming.swift apps/offline_relay/ios/Runner/BleMessageReceiver.swift apps/offline_relay/ios/Runner/BleProfile.swift apps/offline_relay/ios/Runner/BleHelperState.swift apps/offline_relay/test/native/main.swift -o /tmp/offlinerelay-helper-tests
+xcrun swiftc apps/offline_relay/ios/Runner/BleCentralConnections.swift apps/offline_relay/ios/Runner/BleFraming.swift apps/offline_relay/ios/Runner/BleMessageReceiver.swift apps/offline_relay/ios/Runner/BleProfile.swift apps/offline_relay/ios/Runner/BleHelperState.swift apps/offline_relay/test/native/main.swift -o /tmp/offlinerelay-helper-tests
 /tmp/offlinerelay-helper-tests
 ```
 
@@ -259,3 +259,9 @@ Process-restoration and force-quit limitations remain unvalidated.
 Notification delivery depends on CoreBluetooth receiving the request and iOS
 notification settings (including Focus). This adds no force-quit/process-restoration
 availability guarantee and does not turn the app into a continuously running service.
+
+The concurrent-request and Phase 1 UI checkpoint is recorded separately in
+[ios-multiple-outgoing-requests.md](ios-multiple-outgoing-requests.md) and
+[ios-phase-one-ui.md](ios-phase-one-ui.md). The tester confirmed physical iPhone
+validation of the current combined build. Earlier detailed background/notification
+results and remaining process-restoration limitations above remain distinct.

@@ -154,6 +154,29 @@ final class BleRelaySession: NSObject, CBCentralManagerDelegate, CBPeripheralDel
     pendingConnect = result; remote?.delegate = self
     deadline("connection"); central?.connect(found.0, options: nil)
   }
+  func discoveredPeer(_ id: String) -> [String: Any]? { peers[id]?.1 }
+
+  /// A dedicated central session retrieves its own CBPeripheral instance. Never
+  /// share scanner-manager peripherals/delegates with connection managers.
+  func connectPeer(_ id: String, peer: [String: Any], result: @escaping FlutterResult) {
+    guard active, role == .none, let identifier = UUID(uuidString: id) else {
+      result(error("Invalid or occupied central session")); return
+    }
+    role = .central; peerInfo = peer; connectionID = UUID().uuidString
+    pendingConnect = result
+    powerAction = { [weak self] in
+      guard let self = self, self.active, let manager = self.central else { return }
+      self.clear("Bluetooth readiness")
+      guard let remote = manager.retrievePeripherals(withIdentifiers: [identifier]).first else {
+        self.fail("Nearby peer expired; start discovery first"); return
+      }
+      self.remote = remote; remote.delegate = self
+      self.deadline("connection"); manager.connect(remote, options: nil)
+    }
+    deadline("Bluetooth readiness")
+    central = CBCentralManager(delegate: self, queue: .main)
+  }
+
   func send(_ id: String, bytes: Data, result: @escaping FlutterResult) {
     guard active, ready, connectionID == id else { result(error("Connection is not ready")); return }
     guard pendingSend == nil, outbound.isEmpty else { result(error("A message awaits its ACK")); return }
