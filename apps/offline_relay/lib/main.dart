@@ -18,15 +18,26 @@ class _OfflineRelayAppState extends State<OfflineRelayApp> {
   late final RelayDemoController _controller;
   final _nameController = TextEditingController();
   final _chatController = TextEditingController();
+  bool _wasInChat = false;
+  int _chatEpoch = 0;
 
   @override
   void initState() {
     super.initState();
     _controller = RelayDemoController(BleRelayTransport());
+    _controller.addListener(_onConversationChanged);
+  }
+
+  void _onConversationChanged() {
+    if (_controller.inChat == _wasInChat) return;
+    ++_chatEpoch;
+    _wasInChat = _controller.inChat;
+    if (!_wasInChat) _chatController.clear();
   }
 
   @override
   void dispose() {
+    _controller.removeListener(_onConversationChanged);
     _controller.dispose();
     _nameController.dispose();
     _chatController.dispose();
@@ -291,8 +302,11 @@ class _OfflineRelayAppState extends State<OfflineRelayApp> {
   Future<void> _sendChat() async {
     final text = _chatController.text;
     if (text.trim().isEmpty) return;
+    final epoch = _chatEpoch;
     await _run(() => _controller.sendChat(text));
-    _chatController.clear();
+    if (mounted && epoch == _chatEpoch && _chatController.text == text) {
+      _chatController.clear();
+    }
   }
 
 }

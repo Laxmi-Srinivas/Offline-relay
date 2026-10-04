@@ -15,6 +15,20 @@ existing configured author and actual timestamps; no pushes are authorized.
 
 Further results will be appended after execution, not predicted.
 
+### Draft isolation and read-only pause
+
+- After commit `6c52d4a`, a widget regression reproduced an unsent draft surviving
+  disconnect into a different chat. Added editor cleanup on conversation end and
+  a UI epoch guard so late send completion cannot clear a replacement draft.
+- The widget regression passed after the change; the complete Flutter suite
+  passed 27 tests and analysis passed before the user requested a read-only pause.
+- During the pause only fetch/read operations ran. Fetch obtained main
+  `a504c3fa26ab24a9218693fdfe9004cbe1aad758` (background helper availability).
+  No local existing branch was advanced, merged, reset or rewritten.
+- User subsequently authorized resuming fixes/tests/audit commits only on Security.
+  Background integration will preserve existing Security commits and source
+  provenance; no merge or history rewrite is authorized.
+
 ### Consent and session isolation
 
 - Temporary `flutter.bat --version` bootstrapped successfully: Flutter 3.47.6,
