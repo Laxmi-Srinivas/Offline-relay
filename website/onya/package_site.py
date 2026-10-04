@@ -12,7 +12,7 @@ if target == root or root in target.parents:
     parser.error('Choose an output outside website/onya so artifacts do not enter source Git.')
 files = [root / name for name in ['index.html', 'evidence.html', 'styles.css', 'app.js', 'release-config.js']]
 files += sorted((root / 'assets').glob('*'))
-files += sorted((root / 'evidence').glob('*'))
+files += [root / 'evidence' / name for name in ['android-current.md', 'android-download.md', 'sources.json']]
 assert all(path.is_file() for path in files), 'Missing static asset'
 assert not any(path.is_symlink() for path in files), 'Symlinks are not packaged'
 target.parent.mkdir(parents=True, exist_ok=True)

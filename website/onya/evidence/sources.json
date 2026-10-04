@@ -1,34 +1,22 @@
 {
-  "website_base": "67acd0632eb1965482d7b745e06f1ef0c83b55f5",
-  "evidence_label": "repository-recorded; mobile tests not rerun for website",
+  "website_base_commit": "443ab46437797d01406d150c2f7e302d76c6f9c3",
+  "presented_android_source": "8bf78e29b9ff740c3336067dd610b4c4e25e9fca",
+  "android_test_record": "54d30a0220fbe3b18b2a78a792cc9c6f482634a7",
+  "branding_reference": "cf59a028907f5e73880db5c014c907b378fd3eea (only visible text carried into disposable build)",
+  "android_download_sha256": "CF1550C7FE8E8F204C91F96906294F2651BE154AEEC3B621D38DFB89B55D7B34",
   "sources": [
     {
-      "local": "ios-review.md",
-      "source": "docs/security/IOS.md",
-      "commit": "3f9eaf5574bae806fd20265fa40a0ce4e3b0b252",
-      "sha256": "81a1987372fb664b7f6b493b9ec4cb397a9c059d29c475c359429b2256dfe1d7",
-      "url": "https://github.com/Laxmi-Srinivas/Offline-relay/blob/3f9eaf5574bae806fd20265fa40a0ce4e3b0b252/docs/security/IOS.md"
+      "local": "android-current.md",
+      "source": "docs/security/ANDROID_CURRENT.md",
+      "commit": "54d30a0220fbe3b18b2a78a792cc9c6f482634a7",
+      "sha256": "f1142710988048b2696a1f3bd34de4dea661b6b93a2b3a964df85b0aebbc21d4",
+      "url": "https://github.com/Laxmi-Srinivas/Offline-relay/blob/54d30a0220fbe3b18b2a78a792cc9c6f482634a7/docs/security/ANDROID_CURRENT.md"
     },
     {
-      "local": "build-review.md",
-      "source": "docs/security/LATEST_REVIEW.md",
-      "commit": "3f9eaf5574bae806fd20265fa40a0ce4e3b0b252",
-      "sha256": "5ed41844ab028c6b64e98a03e53a3021c5ffb4b9f5a818befb6afbfd08a166dd",
-      "url": "https://github.com/Laxmi-Srinivas/Offline-relay/blob/3f9eaf5574bae806fd20265fa40a0ce4e3b0b252/docs/security/LATEST_REVIEW.md"
-    },
-    {
-      "local": "verification.md",
-      "source": "docs/security/VERIFICATION.md",
-      "commit": "3f9eaf5574bae806fd20265fa40a0ce4e3b0b252",
-      "sha256": "fa435e6c80e26ea51374ae6199c8cdfff6822cbac37af519a682bb523f8bcdf9",
-      "url": "https://github.com/Laxmi-Srinivas/Offline-relay/blob/3f9eaf5574bae806fd20265fa40a0ce4e3b0b252/docs/security/VERIFICATION.md"
-    },
-    {
-      "local": "security-review.md",
-      "source": "docs/security/README.md",
-      "commit": "3f9eaf5574bae806fd20265fa40a0ce4e3b0b252",
-      "sha256": "95df4082abd4d3c46ecc31fc703f186622bfe1ca4b47bcf88ec7913e225ae4ca",
-      "url": "https://github.com/Laxmi-Srinivas/Offline-relay/blob/3f9eaf5574bae806fd20265fa40a0ce4e3b0b252/docs/security/README.md"
+      "local": "android-download.md",
+      "source": "website presentation build record",
+      "commit": "Android source 8bf78e2 + visible branding overlay from cf59a02",
+      "sha256": "9c70bfc1e945c53c0f88f2c68893767dd183a294af2d1ae270f078e6dfbd7573"
     }
   ]
 }

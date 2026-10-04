@@ -63,19 +63,20 @@ manifest = json.loads((root / 'evidence/sources.json').read_text(encoding='utf-8
 for source in manifest['sources']:
     content = (root / 'evidence' / source['local']).read_bytes()
     assert hashlib.sha256(content).hexdigest() == source['sha256'], f'Evidence changed: {source["local"]}'
-assert b'all 38 tests' in (root / 'evidence/ios-review.md').read_bytes()
+assert b'60 Flutter tests passed' in (root / 'evidence/android-current.md').read_bytes()
+assert 'CF1550C7FE8E8F204C91F96906294F2651BE154AEEC3B621D38DFB89B55D7B34' in (root / 'evidence/android-download.md').read_text(encoding='utf-8')
+assert '8bf78e29b9ff740c3336067dd610b4c4e25e9fca' in manifest['presented_android_source']
 assert b'flutter build apk --debug' in (root / 'evidence/build-review.md').read_bytes()
 print('PASS: pinned evidence copies match their SHA-256 manifest; reported test/build results exist')
 
-# Current release links are deliberately unset. A supplied URL/version will require
-# updating these placeholder assertions and recording actual asset verification.
 release = (root / 'release-config.js').read_text(encoding='utf-8')
-assert 'url: null, version: null, sourceCommit: null' in release and 'iphoneDemo: Object.freeze({ url: null })' in release
+assert 'releases/download/onya-android-security-v0.0.1-test.1/Onya-Android-Security-Test-0.0.1.apk' in release
 page = (root / 'index.html').read_text(encoding='utf-8')
-assert 'Android download being prepared.' in page
-assert 'iOS public download not available yet.' in page
-assert 'id="android-download" hidden' in page and 'id="iphone-demo" hidden' in page
-print('PASS: no invented APK/version/video links; correct Android/iOS placeholders')
+assert 'Download the Onya Android security test APK.' in page
+assert 'id=\"android-download\" href=\"https://github.com/Laxmi-Srinivas/Offline-relay/releases/download/onya-android-security-v0.0.1-test.1/Onya-Android-Security-Test-0.0.1.apk\"' in page
+for public_file in ['index.html', 'evidence.html', 'app.js', 'release-config.js']:
+    assert not re.search(r'iOS|iPhone|iPad|ios|iphone', (root / public_file).read_text(encoding='utf-8'), re.I), public_file
+print('PASS: Android-only public copy and pinned APK release configuration')
 
 with tempfile.TemporaryDirectory(prefix='onya-package-check-') as directory:
     archive_path = Path(directory) / 'onya.zip'
@@ -84,7 +85,8 @@ with tempfile.TemporaryDirectory(prefix='onya-package-check-') as directory:
         names = archive.namelist()
         allowed = {'index.html', 'evidence.html', 'styles.css', 'app.js', 'release-config.js'}
         assert 'index.html' in names
-        assert all(name in allowed or name.startswith(('assets/', 'evidence/')) for name in names), names
+        assert all(name in allowed or name.startswith(('assets/', 'evidence/')) for name in names)
+        assert not any('ios' in name.lower() or 'iphone' in name.lower() for name in names), names
         assert not any('..' in Path(name).parts or name.startswith('/') for name in names)
         assert not any(name.startswith(('apps/', '.git/', 'tests/', 'presentation/')) for name in names)
         assert not any(name.endswith(('.py', '.apk', '.ipa', '.jks', '.keystore')) for name in names)

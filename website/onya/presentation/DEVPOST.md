@@ -55,7 +55,7 @@ The Android build encountered SDK setup and disk-space failures before succeedin
 
 ## Accomplishments
 
-Committed records substantiate 38 shared Flutter tests and analysis passing, plus
+Committed records substantiate 60 shared Flutter tests and analysis passing, plus
 earlier Android policy tests and a successful debug APK build. Tests cover specific
 consent/session/resource properties; they do not establish physical radio security.
 We created a presentation that explains the human decision, engineering and
@@ -76,9 +76,8 @@ Security changes. There is no public iOS download or supplied recording yet.
 
 Verify prepared native iOS fixes on a Mac, complete controlled-device security
 checks, establish actual Bluetooth encryption/authentication behavior, and
-integrate the final mobile UI with the Security fixes before release. Peer names
-are self-asserted and application-level end-to-end encryption is not established
-in the inspected committed code. Add real screenshots/recordings and build links
+resolve the recorded background/rejection failures before treating reliability checks as passed. Peer names
+are self-asserted and the selected Android build uses chat encryption with unauthenticated key exchange. Add real screenshots/recordings and build links
 only after the relevant implementation is verified.
 
 ## Built-with tags to confirm
@@ -94,7 +93,7 @@ Do not add sponsor technologies that were not actually used.
 - Demo video: not yet recorded/uploaded. Follow the event's length requirements.
 - Gallery cover: `../assets/devpost-cover.png`, 1200 × 800, original project
   illustration. It is not an app screenshot or evidence of device testing.
-- Three-minute narration outline: RUNBOOK.md. Record the labelled website flow;
+- Two-minute live demo script: RUNBOOK.md. Record the labelled website flow;
   add real app footage only if it has been captured and accurately scoped.
 
 ## Submission checks still owned by the team
@@ -119,3 +118,13 @@ thumbnail (JPG/PNG/GIF, maximum 5 MB). The included PNG is well below that limit
 [Devpost video guidance](https://help.devpost.com/article/84-video-making-best-practices)
 recommends a clear screencast and rehearsed narration. Event-specific rules take
 precedence over this preparation pack.
+
+
+## Current Android presentation source
+
+Use Security 8bf78e2 (0.0.1+1), not the older Security APK. Its latest recorded
+60 shared tests, analysis/build and controlled foreground chat checks passed.
+Background delivery and rejection produced GATT errors; say so if asked.
+Chat encryption is implemented, but key exchange does not authenticate identity.
+iOS is team-reported and separate; use a real recording only when supplied.
+The supplied Onya symbol is used unchanged. The Onya Android 0.0.1 debug test APK is published as a prerelease asset at https://github.com/Laxmi-Srinivas/Offline-relay/releases/tag/onya-android-security-v0.0.1-test.1. It is not production-ready.
