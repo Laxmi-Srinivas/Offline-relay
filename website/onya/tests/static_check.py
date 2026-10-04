@@ -61,7 +61,7 @@ print('PASS: local font assets and reduced-motion fallback')
 
 manifest = json.loads((root / 'evidence/sources.json').read_text(encoding='utf-8'))
 for source in manifest['sources']:
-    content = (root / 'evidence' / source['local']).read_bytes()
+    content = (root / 'evidence' / source['local']).read_bytes().replace(b'\r\n', b'\n')
     assert hashlib.sha256(content).hexdigest() == source['sha256'], f'Evidence changed: {source["local"]}'
 assert b'60 Flutter tests passed' in (root / 'evidence/android-current.md').read_bytes()
 assert 'CF1550C7FE8E8F204C91F96906294F2651BE154AEEC3B621D38DFB89B55D7B34' in (root / 'evidence/android-download.md').read_text(encoding='utf-8')
