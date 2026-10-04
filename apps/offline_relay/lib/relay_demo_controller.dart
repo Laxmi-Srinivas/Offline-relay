@@ -45,6 +45,8 @@ class RelayDemoController extends ChangeNotifier {
   RelayConnection? _connection;
   RelayConnection? _incomingConnection;
   String? _outgoingRequestId;
+  int _sessionEpoch = 0;
+  bool _disposed = false;
   StreamSubscription<RelayConnection>? _incomingSubscription;
   StreamSubscription<RelayPeer>? _discoverySubscription;
   StreamSubscription<Uint8List>? _messageSubscription;
@@ -106,15 +108,25 @@ class RelayDemoController extends ChangeNotifier {
 
   Future<void> connectTo(RelayPeer peer) async {
     _requireName();
+    if (isConnecting || _connection != null || _incomingConnection != null) {
+      throw StateError('Finish the current connection first.');
+    }
+    final epoch = ++_sessionEpoch;
+    messages.clear();
     isConnecting = true;
     status = 'Connecting to ${peer.label}…';
     notifyListeners();
     try {
       final connection = await _transport.connect(peer);
+      if (_disposed || epoch != _sessionEpoch) {
+        await connection.close();
+        return;
+      }
       _connection = connection;
       remoteName = peer.label;
       _listenForMessages(connection);
       await _discoverySubscription?.cancel();
+      if (!_isCurrent(connection) || epoch != _sessionEpoch) return;
       _discoverySubscription = null;
       isDiscovering = false;
       final request = RelayEnvelope.create(
@@ -126,12 +138,22 @@ class RelayDemoController extends ChangeNotifier {
       status = 'Connection request sent to ${peer.label}.';
       notifyListeners();
       await _sendEnvelope(request);
-      if (isWaitingForAcceptance) {
+      if (_isCurrent(connection) && isWaitingForAcceptance) {
         status = 'Connection request sent to ${peer.label}.';
       }
+    } catch (error) {
+      if (!_disposed && epoch == _sessionEpoch) {
+        final connection = _connection;
+        _clearSession();
+        if (connection != null) unawaited(connection.close());
+        _setStatus('Connection failed: $error');
+      }
+      rethrow;
     } finally {
-      isConnecting = false;
-      notifyListeners();
+      if (!_disposed && epoch == _sessionEpoch) {
+        isConnecting = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -146,37 +168,50 @@ class RelayDemoController extends ChangeNotifier {
     incomingPeerName = null;
     incomingRequestId = null;
     _incomingConnection = null;
-    await _transport.stopAdvertising();
-    isOffering = false;
-    await _sendEnvelope(
-      RelayEnvelope.create(
-        type: RelayMessageType.connectionAccept,
-        body: {'requestId': requestId},
-      ),
-    );
-    inChat = true;
-    status = 'Connected with $remoteName.';
-    notifyListeners();
+    try {
+      await _transport.stopAdvertising();
+      if (!_isCurrent(connection)) return;
+      isOffering = false;
+      await _sendEnvelope(
+        RelayEnvelope.create(
+          type: RelayMessageType.connectionAccept,
+          body: {'requestId': requestId},
+        ),
+      );
+      if (!_isCurrent(connection)) return;
+      inChat = true;
+      status = 'Connected with $remoteName.';
+      notifyListeners();
+    } catch (error) {
+      _endConnection(connection, 'Acceptance failed: $error');
+      await connection.close();
+      rethrow;
+    }
   }
 
   Future<void> rejectIncomingRequest() async {
     final connection = _incomingConnection;
     final requestId = incomingRequestId;
     if (connection == null || requestId == null) return;
-    await connection.send(
-      RelayEnvelope.create(
-        type: RelayMessageType.connectionReject,
-        body: {'requestId': requestId},
-      ).encode(),
-    );
-    _clearIncomingRequest();
-    await connection.close();
-    isOffering = false;
-    status = 'Connection request declined.';
-    notifyListeners();
+    try {
+      await connection.send(
+        RelayEnvelope.create(
+          type: RelayMessageType.connectionReject,
+          body: {'requestId': requestId},
+        ).encode(),
+      );
+    } finally {
+      _endConnection(connection, 'Connection request declined.');
+      await connection.close();
+    }
   }
 
   Future<void> sendChat(String text) async {
+    final connection = _connection;
+    if (_disposed || !inChat || connection == null) {
+      throw StateError('Wait for connection approval before sending chat.');
+    }
+    final epoch = _sessionEpoch;
     final value = text.trim();
     if (value.isEmpty) return;
     final envelope = RelayEnvelope.create(
@@ -184,6 +219,7 @@ class RelayDemoController extends ChangeNotifier {
       body: {'text': value},
     );
     await _sendEnvelope(envelope);
+    if (!_isCurrent(connection) || epoch != _sessionEpoch || !inChat) return;
     messages.add(
       RelayConversationMessage(
         id: envelope.id,
@@ -195,36 +231,34 @@ class RelayDemoController extends ChangeNotifier {
   }
 
   Future<void> returnToNearby() async {
+    final connection = _connection ?? _incomingConnection;
+    // Invalidate pending asynchronous work before any awaited cleanup.
+    _clearSession();
     await _discoverySubscription?.cancel();
     _discoverySubscription = null;
-    final connection = _connection ?? _incomingConnection;
-    _connection = null;
-    _incomingConnection = null;
     await _messageSubscription?.cancel();
     _messageSubscription = null;
     if (connection != null) await connection.close();
     await _transport.stopAdvertising();
     peers.clear();
-    messages.clear();
-    _clearIncomingRequest();
-    remoteName = null;
-    _outgoingRequestId = null;
     isDiscovering = false;
     isOffering = false;
-    isWaitingForAcceptance = false;
-    inChat = false;
+    if (_disposed) return;
     status = 'Choose Find Nearby Helpers or Offer Help.';
     notifyListeners();
   }
 
   void _onIncomingConnection(RelayConnection connection) {
-    if (role != RelayUserRole.internetHelper ||
+    if (_disposed ||
+        role != RelayUserRole.internetHelper ||
         _incomingConnection != null ||
         _connection != null) {
       unawaited(connection.close());
       return;
     }
     _incomingConnection = connection;
+    ++_sessionEpoch;
+    messages.clear();
     incomingPeerName = connection.peer.label;
     _listenForMessages(connection);
     status = 'A nearby user wants to connect.';
@@ -236,22 +270,16 @@ class RelayDemoController extends ChangeNotifier {
     _messageSubscription = connection.messages.listen(
       (bytes) => _onEnvelope(connection, bytes),
       onError: (Object error) {
-        inChat = false;
-        isWaitingForAcceptance = false;
-        _setStatus('Connection ended: $error');
+        _endConnection(connection, 'Connection ended: $error');
       },
       onDone: () {
-        if (identical(_connection, connection) ||
-            identical(_incomingConnection, connection)) {
-          inChat = false;
-          isWaitingForAcceptance = false;
-          _setStatus('Connection closed.');
-        }
+        _endConnection(connection, 'Connection closed.');
       },
     );
   }
 
   void _onEnvelope(RelayConnection connection, Uint8List bytes) {
+    if (!_isCurrent(connection)) return;
     late final RelayEnvelope envelope;
     try {
       envelope = RelayEnvelope.decode(bytes);
@@ -262,7 +290,14 @@ class RelayDemoController extends ChangeNotifier {
     switch (envelope.type) {
       case RelayMessageType.connectionRequest:
         if (role != RelayUserRole.internetHelper ||
-            !identical(_incomingConnection, connection)) {
+            !identical(_incomingConnection, connection) ||
+            incomingRequestId != null) {
+          return;
+        }
+        final name = _bodyString(envelope, 'name');
+        if (name == null ||
+            name.trim().isEmpty ||
+            envelope.body['role'] != 'offline_user') {
           return;
         }
         incomingRequestId = envelope.id;
@@ -271,20 +306,21 @@ class RelayDemoController extends ChangeNotifier {
         status = 'Connection request from $incomingPeerName.';
         notifyListeners();
       case RelayMessageType.connectionAccept:
-        if (envelope.body['requestId'] != _outgoingRequestId) return;
+        if (!_matchesOutgoingRequest(connection, envelope)) return;
+        _outgoingRequestId = null;
         isWaitingForAcceptance = false;
         inChat = true;
         status = 'Connection accepted by ${remoteName ?? 'helper'}.';
         notifyListeners();
       case RelayMessageType.connectionReject:
-        if (envelope.body['requestId'] != _outgoingRequestId) return;
-        isWaitingForAcceptance = false;
-        inChat = false;
-        status = 'The helper declined the connection request.';
-        _connection = null;
+        if (!_matchesOutgoingRequest(connection, envelope)) return;
+        _endConnection(
+          connection,
+          'The helper declined the connection request.',
+        );
         unawaited(connection.close());
-        notifyListeners();
       case RelayMessageType.chat:
+        if (!inChat || !identical(_connection, connection)) return;
         final text = _bodyString(envelope, 'text');
         if (text == null) return;
         messages.add(
@@ -297,9 +333,47 @@ class RelayDemoController extends ChangeNotifier {
         notifyListeners();
       case RelayMessageType.serviceRequest:
       case RelayMessageType.serviceResponse:
-        // Reserved by the shared transport contract; this MVP treats them as
-        // unsupported messages and keeps the chat flow text-only.
+      // Reserved by the shared transport contract; this MVP treats them as
+      // unsupported messages and keeps the chat flow text-only.
     }
+  }
+
+  bool _isCurrent(RelayConnection connection) =>
+      !_disposed &&
+      (identical(_connection, connection) ||
+          identical(_incomingConnection, connection));
+
+  bool _matchesOutgoingRequest(
+    RelayConnection connection,
+    RelayEnvelope envelope,
+  ) =>
+      role == RelayUserRole.offlineUser &&
+      identical(_connection, connection) &&
+      isWaitingForAcceptance &&
+      !inChat &&
+      _outgoingRequestId != null &&
+      envelope.body['requestId'] == _outgoingRequestId;
+
+  void _clearSession() {
+    ++_sessionEpoch;
+    _connection = null;
+    _incomingConnection = null;
+    _outgoingRequestId = null;
+    _clearIncomingRequest();
+    remoteName = null;
+    messages.clear();
+    inChat = false;
+    isConnecting = false;
+    isWaitingForAcceptance = false;
+    isOffering = false;
+  }
+
+  void _endConnection(RelayConnection connection, String reason) {
+    if (!_isCurrent(connection)) return;
+    _clearSession();
+    unawaited(_messageSubscription?.cancel());
+    _messageSubscription = null;
+    _setStatus(reason);
   }
 
   Future<void> _sendEnvelope(RelayEnvelope envelope) async {
@@ -314,6 +388,7 @@ class RelayDemoController extends ChangeNotifier {
   }
 
   void _requireName() {
+    if (_disposed) throw StateError('Controller has been disposed.');
     if (displayName.trim().isEmpty) {
       throw StateError('Enter your name first.');
     }
@@ -339,6 +414,8 @@ class RelayDemoController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
+    _clearSession();
     unawaited(_incomingSubscription?.cancel());
     unawaited(_discoverySubscription?.cancel());
     unawaited(_messageSubscription?.cancel());
