@@ -2,7 +2,8 @@
 
 Commands run only in the Security worktree unless stated otherwise. Test-generated
 files and temporary tooling are not application persistence. Git commits use the
-existing configured author and actual timestamps; no pushes are authorized.
+existing configured author and actual timestamps. The user subsequently authorized
+publishing Security only; other branches and history remain protected.
 
 | Command / operation | Purpose | Actual outcome and limitation |
 | --- | --- | --- |

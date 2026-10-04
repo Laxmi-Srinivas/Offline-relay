@@ -1,5 +1,10 @@
 # Reproducible verification
 
+Latest result: the debug APK build from Security 8f2621c passed after resolving
+SDK setup and disk-space failures. See [LATEST_REVIEW.md](LATEST_REVIEW.md) for
+the artifact hash, dependency report and source coverage. Earlier failures below
+are historical; physical-device checks remain pending.
+
 ## Automated checks
 
 Consent/session changes: Flutter analysis passed, all 19 tests passed (9 existing
