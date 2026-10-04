@@ -80,3 +80,14 @@ with application ACK. These were physical-device results, not simulator results.
 See the [iOS validation record](ios-peripheral-checkpoint.md) for the role matrix,
 evidence attribution, and remaining negative-case checks. No Android ↔ iPhone
 testing was performed during this iOS-only phase.
+
+## Physical iOS product peer chat — 2026-10-04
+
+The user reported successful physical validation of the real `apps/offline_relay`
+app on two iPhones in both Internet Helper / Offline User role assignments.
+Offer Help, Find Nearby Helpers, peer discovery, Connect, connection request,
+Accept, chat entry, and successful text messages in both directions passed.
+This product-level result is distinct from the earlier disposable BLE diagnostics
+Hello/256-byte validation and was performed on real devices, not a simulator.
+See [the product adapter record](ios-product-adapter.md) for the reported role
+matrix, evidence attribution, and remaining unverified failure cases.

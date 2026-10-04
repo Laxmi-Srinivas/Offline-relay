@@ -8,7 +8,7 @@ hardware, OS, app revision, role assignment, permissions, and logs for each run.
 | --- | --- | --- |
 | Android 12+ ↔ Android 12+ | BLE, test both role assignments | Native source prepared; APK blocked; not tested |
 | Android ↔ iOS | BLE, test both role assignments | Not tested |
-| iOS ↔ iOS | BLE | User-reported physical pass in both roles: Hello + ACK, 256-byte 00..ff + ACK; see [record](ios-peripheral-checkpoint.md) |
+| iOS ↔ iOS | BLE | Diagnostics Hello/256-byte + ACK passed; real app discovery, approval, and bidirectional chat user-reported passed in both roles; see [product record](ios-product-adapter.md) |
 | Linux/macOS/Windows laptops | LAN, each actual pair separately | Not implemented/tested |
 | Phone ↔ laptop on shared LAN | Possible later extension | Unverified, not initial POC |
 
