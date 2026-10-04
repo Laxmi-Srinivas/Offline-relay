@@ -1,8 +1,8 @@
 # Validation record — 2026-10-04
 
-Task status: **incomplete at native build/device validation**. Source and
-documentation are prepared; no installable target or physical BLE exchange has
-been verified. Development stopped at the native toolchain blocker.
+Task status: **BLE POC debug APK and physical-device validation passed**. The
+product host's native platform builds and the BLE negative-case matrix remain
+unverified.
 
 ## Environment
 
@@ -40,18 +40,33 @@ Android lint, and native framing tests have not run. Flutter analysis/tests do
 not cover them. Mock channels in the diagnostic tests are explicitly not
 networking success evidence.
 
+## Physical Android BLE POC — 2026-10-04
+
+The existing POC debug APK was installed on two authorized physical Android 16
+(API 36) phones: OPPO CPH2729 (`8fb67c3d`) and Realme RMX3998IN
+(`YDPV6TFMBY85RCJN`). Nearby Devices permissions were granted on both. No
+application implementation files were changed for this validation.
+
+The runbook passed in both directions:
+
+| Central | Peripheral | Advertising, discovery, connection | Hello + application ACK | 256-byte transfer + ACK | Stop/disconnect |
+| --- | --- | --- | --- | --- | --- |
+| OPPO CPH2729 | Realme RMX3998IN | Passed | Passed; `Hello`, ID 1, 5 bytes | Passed; ID 2, 16 frames, exact `00..ff`, 256 bytes | Passed; `user stop` on both |
+| Realme RMX3998IN | OPPO CPH2729 | Passed | Passed; `Hello`, ID 1, 5 bytes | Passed; ID 2, 16 frames, exact `00..ff`, 256 bytes | Passed; `user stop` on both |
+
+The peripheral logs reported `message_received ... exact_payload_verified=true`
+for both payloads and submitted each application ACK; the central logs reported
+matching `acknowledgement_received` IDs and lengths. Advertising, device
+discovery, connection, and data/ACK characteristic discovery were logged in
+each direction. Timeout behavior was not tested. The logs were collected with
+`adb logcat -v time OfflineRelayBLE:I '*:S'` on both devices.
+
 ## Required next environment work
 
-Provide an Android SDK with the platform/build tools required by the generated
-Flutter project and complete its license setup. Re-run the APK build, resolve
-any native compiler/lint findings, then use two physical Android 12+ phones to
-execute the [runbook](../../experiments/ble_poc/README.md). Confirm the actual
-phone models and their role support; neither role is assumed from OS version.
-
-For the foundation's Linux native build, install Ninja, clang++ and GTK 3
-development prerequisites, then rebuild. iOS/macOS and Windows need their own
-build hosts. These blockers are not evidence that BLE is impossible on any of
-the intended platforms.
-
-No commits, pushes, production features, or system package installations were
-performed. The original Git repository and remote remain in place.
+The BLE POC debug APK and its baseline physical-device runbook are verified.
+Timeouts and the full negative-case [device matrix](device-matrix.md) remain to
+be tested. The product host still needs native build validation; its Linux
+toolchain checkpoint lacked Ninja, clang++, and GTK 3 development prerequisites.
+iOS/macOS and Windows product-host builds have not been validated. These
+remaining build and matrix checks do not change the successful BLE POC results
+above.
