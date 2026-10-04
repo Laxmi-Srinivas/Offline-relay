@@ -5,6 +5,9 @@ package dev.offlinerelay.offline_relay.ble
 import android.bluetooth.*
 import android.bluetooth.le.*
 import android.content.Context
+import android.content.BroadcastReceiver
+import android.content.Intent
+import android.content.IntentFilter
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -67,21 +70,59 @@ class BleRelaySession(
     private var outboundId = 0
     private var outboundLength = 0
     private var outboundIsPeripheral = false
+    private var peripheralAckReceived = false
     private var nextMessageId = 0
     private var receiveId = -1
     private var receiveCount = 0
     private var receiveIndex = 0
     private val received = ByteArrayOutputStream()
     private var acknowledgement = byteArrayOf()
-    private val deadlines = BleDeadlines(
-        schedule = { delay, action ->
-            val callback = Runnable { action() }
-            handler.postDelayed(callback, delay)
-            val cancel: () -> Unit = { handler.removeCallbacks(callback) }
-            cancel
-        },
-        expired = { stage -> if (active) fail("timeout: $stage") },
-    )
+    private var timeout: Runnable? = null
+    private var sendTimeout: Runnable? = null
+    private var receiveTimeout: Runnable? = null
+    private var ackWriteTimeout: Runnable? = null
+    private var incomingAckPending = false
+    private var pendingClose: MethodChannel.Result? = null
+
+    private fun incomingAckCompleted() {
+        incomingAckPending = false
+        if (pendingClose != null) {
+            // Allow the submitted GATT response to leave Android before closing the link.
+            handler.postDelayed({ stop("local close", notify = true) }, 150)
+        }
+    }
+    private val clientOperations = java.util.ArrayDeque<() -> Unit>()
+    private var clientBusy = false
+    private val radioReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.getIntExtra(BluetoothAdapter.EXTRA_STATE, -1) == BluetoothAdapter.STATE_TURNING_OFF) {
+                event { fail("Bluetooth is disabled. Turn it on and try again.") }
+            }
+        }
+    }
+
+    init {
+        if (Build.VERSION.SDK_INT >= 33) {
+            this.context.registerReceiver(radioReceiver, IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED), Context.RECEIVER_NOT_EXPORTED)
+        } else this.context.registerReceiver(radioReceiver, IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED))
+    }
+
+    private fun queueClientOperation(operation: () -> Unit) {
+        clientOperations.addLast(operation)
+        runClientOperation()
+    }
+
+    private fun runClientOperation() {
+        if (!clientBusy && clientOperations.isNotEmpty()) {
+            clientBusy = true
+            clientOperations.removeFirst()()
+        }
+    }
+
+    private fun clientOperationDone() {
+        clientBusy = false
+        runClientOperation()
+    }
 
     private fun log(name: String, fields: Map<String, Any?> = emptyMap()) {
         val line = buildString {
@@ -101,12 +142,16 @@ class BleRelaySession(
         }
     }
 
-    private fun deadline(stage: String, operation: BleDeadlines.Operation = BleDeadlines.Operation.SETUP) {
-        deadlines.arm(operation, stage)
+    private fun deadline(stage: String) {
+        clearDeadline()
+        timeout = Runnable { fail("timeout: $stage") }.also {
+            handler.postDelayed(it, 15_000)
+        }
     }
 
-    private fun clearDeadline(operation: BleDeadlines.Operation = BleDeadlines.Operation.SETUP) {
-        deadlines.clear(operation)
+    private fun clearDeadline() {
+        timeout?.let(handler::removeCallbacks)
+        timeout = null
     }
 
     fun advertise(profile: Map<String, Any?>, result: MethodChannel.Result) {
@@ -173,13 +218,15 @@ class BleRelaySession(
         if (scanning) release { adapter.bluetoothLeScanner?.stopScan(scanCallback) }
         scanning = false
         if (role == Role.CENTRAL && gatt == null) role = Role.NONE
-        clearDeadline()
+        if (gatt == null) clearDeadline()
         result.success(null)
     }
 
     fun connect(peerId: String, result: MethodChannel.Result) {
-        check(role == Role.CENTRAL && scanning) { "Start discovery first" }
+        check(active && gatt == null && role != Role.PERIPHERAL) { "A BLE connection is already active" }
+        check(adapter.isEnabled) { "Enable Bluetooth first" }
         val peer = requireNotNull(discovered[peerId]) { "Nearby peer expired; scan again" }
+        role = Role.CENTRAL
         release { adapter.bluetoothLeScanner?.stopScan(scanCallback) }
         scanning = false
         pendingConnect = result
@@ -205,6 +252,7 @@ class BleRelaySession(
         }
         outboundIndex = 0
         outboundIsPeripheral = role == Role.PERIPHERAL
+        peripheralAckReceived = false
         pendingSend = result
         expectedAck = byteArrayOf(
             1,
@@ -212,11 +260,19 @@ class BleRelaySession(
             (outboundLength shr 8).toByte(),
             outboundLength.toByte(),
         )
-        deadline("message write / application ACK", BleDeadlines.Operation.SEND)
+        sendTimeout = Runnable { fail("timeout: message write / application ACK") }.also {
+            handler.postDelayed(it, 15_000)
+        }
         if (outboundIsPeripheral) sendNextNotification() else writeNext()
     }
 
     fun close(id: String, result: MethodChannel.Result) {
+        if (connectionId == id && incomingAckPending) {
+            if (pendingClose != null) { result.success(null); return }
+            pendingClose = result
+            deadline("final acknowledgement before close")
+            return
+        }
         if (connectionId == id) stop("local close", notify = true)
         result.success(null)
     }
@@ -285,6 +341,7 @@ class BleRelaySession(
 
     private val clientCallback = object : BluetoothGattCallback() {
         override fun onConnectionStateChange(client: BluetoothGatt, status: Int, newState: Int) = event {
+            if (client !== gatt) return@event
             if (status != BluetoothGatt.GATT_SUCCESS || newState == BluetoothProfile.STATE_DISCONNECTED) {
                 stop("disconnect status=$status state=$newState", notify = true)
             } else if (newState == BluetoothProfile.STATE_CONNECTED) {
@@ -340,16 +397,23 @@ class BleRelaySession(
             characteristic: BluetoothGattCharacteristic,
             status: Int,
         ) = event {
-            if (characteristic.uuid == ACK) return@event // ACK for peripheral-originated data.
             check(status == BluetoothGatt.GATT_SUCCESS) { "write_error status=$status" }
+            if (characteristic.uuid == ACK) {
+                ackWriteTimeout?.let(handler::removeCallbacks)
+                ackWriteTimeout = null
+                incomingAckCompleted()
+                clientOperationDone()
+                return@event
+            }
             check(characteristic.uuid == DATA && outbound.isNotEmpty() && !outboundIsPeripheral) {
                 "Unexpected write callback"
             }
             outboundIndex++
             if (outboundIndex < outbound.size) writeNext() else {
                 log("message_sent", mapOf("id" to outboundId, "bytes" to outboundLength))
-                check(client.readCharacteristic(ack)) { "ACK read rejected" }
+                queueClientOperation { check(client.readCharacteristic(ack)) { "ACK read rejected" } }
             }
+            clientOperationDone()
         }
 
         override fun onCharacteristicRead(
@@ -363,6 +427,16 @@ class BleRelaySession(
                     "ack_read_error status=$status"
                 }
                 completeClientSend(value)
+                clientOperationDone()
+            }
+        }
+
+        override fun onCharacteristicRead(client: BluetoothGatt, characteristic: BluetoothGattCharacteristic, value: ByteArray, status: Int) {
+            val copy = value.clone()
+            event {
+                check(status == BluetoothGatt.GATT_SUCCESS && characteristic.uuid == ACK) { "ack_read_error status=$status" }
+                completeClientSend(copy)
+                clientOperationDone()
             }
         }
 
@@ -407,6 +481,7 @@ class BleRelaySession(
                     log("peer_rejected", mapOf("reason" to "one connection only"))
                 } else {
                     remote = device
+                    if (remote == device && connectionId != null) return@event
                     connectionId = UUID.randomUUID().toString()
                     val label = try {
                         device.name?.takeIf { it.isNotBlank() } ?: "Nearby OfflineRelay user"
@@ -434,13 +509,15 @@ class BleRelaySession(
             offset: Int,
             value: ByteArray,
         ) = event {
-            val valid = device == remote && descriptor.uuid == CCCD && !preparedWrite && offset == 0
+            val valid = device == remote && descriptor.uuid == CCCD && !preparedWrite && offset == 0 &&
+                value.contentEquals(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
             if (valid) {
                 notificationEnabled = value.contentEquals(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
                 if (notificationEnabled && !incomingAnnounced && connectionId != null) {
-                    clearDeadline()
                     incomingAnnounced = true
                     ready = true
+                    clearDeadline()
+                    deadline("first application message")
                     emit(mapOf("event" to "incomingConnection", "connectionId" to connectionId,
                         "peer" to peerInfo))
                 }
@@ -474,9 +551,10 @@ class BleRelaySession(
                     log("receive_error", mapOf("message" to error.message))
                     resetReceive()
                     acknowledgement = byteArrayOf()
-                    clearDeadline(BleDeadlines.Operation.RECEIVE)
+                    receiveTimeout?.let(handler::removeCallbacks)
+                    receiveTimeout = null
                 }
-                check(server?.sendResponse(device, requestId, status, offset, null) == true) {
+                check(!responseNeeded || server?.sendResponse(device, requestId, status, offset, null) == true) {
                     "GATT write response rejected"
                 }
             }
@@ -493,14 +571,19 @@ class BleRelaySession(
             check(server?.sendResponse(device, requestId,
                 if (valid) BluetoothGatt.GATT_SUCCESS else BluetoothGatt.GATT_FAILURE,
                 offset, if (valid) acknowledgement else null) == true) { "ACK response rejected" }
+            if (valid) incomingAckCompleted()
         }
 
         override fun onNotificationSent(device: BluetoothDevice, status: Int) = event {
+            if (device != remote || outbound.isEmpty()) return@event
             check(status == BluetoothGatt.GATT_SUCCESS) { "notification_error status=$status" }
             check(outboundIsPeripheral && outbound.isNotEmpty()) { "Unexpected notification callback" }
             outboundIndex++
             if (outboundIndex < outbound.size) sendNextNotification()
-            else log("message_sent", mapOf("id" to outboundId, "bytes" to outboundLength))
+            else {
+                log("message_sent", mapOf("id" to outboundId, "bytes" to outboundLength))
+                if (peripheralAckReceived) finishPeripheralSend()
+            }
         }
 
         override fun onExecuteWrite(device: BluetoothDevice, requestId: Int, execute: Boolean) = event {
@@ -509,10 +592,13 @@ class BleRelaySession(
     }
 
     private fun writeNext() {
-        val characteristic = requireNotNull(data)
-        characteristic.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
-        characteristic.value = outbound[outboundIndex]
-        check(gatt?.writeCharacteristic(characteristic) == true) { "GATT write rejected" }
+        val frame = outbound[outboundIndex].clone()
+        queueClientOperation {
+            val characteristic = requireNotNull(data)
+            characteristic.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+            characteristic.value = frame
+            check(gatt?.writeCharacteristic(characteristic) == true) { "GATT write rejected" }
+        }
     }
 
     // Legacy advertising is limited to 31 bytes. The scan response carries a
@@ -558,7 +644,8 @@ class BleRelaySession(
         check(outbound.isNotEmpty() && !outboundIsPeripheral && value.contentEquals(expectedAck)) {
             "Application ACK mismatch"
         }
-        clearDeadline(BleDeadlines.Operation.SEND)
+        sendTimeout?.let(handler::removeCallbacks)
+        sendTimeout = null
         pendingSend?.success(null)
         pendingSend = null
         log("acknowledgement_received", mapOf("id" to outboundId, "bytes" to outboundLength))
@@ -569,7 +656,14 @@ class BleRelaySession(
         check(outbound.isNotEmpty() && outboundIsPeripheral && value.contentEquals(expectedAck)) {
             "Application ACK mismatch"
         }
-        clearDeadline(BleDeadlines.Operation.SEND)
+        peripheralAckReceived = true
+        // An ACK may arrive before the final local notification callback.
+        if (outboundIndex >= outbound.size) finishPeripheralSend()
+    }
+
+    private fun finishPeripheralSend() {
+        sendTimeout?.let(handler::removeCallbacks)
+        sendTimeout = null
         pendingSend?.success(null)
         pendingSend = null
         log("acknowledgement_received", mapOf("id" to outboundId, "bytes" to outboundLength))
@@ -588,7 +682,8 @@ class BleRelaySession(
             acknowledgement = byteArrayOf()
             receiveId = id
             receiveCount = count
-            deadline("reassembly", BleDeadlines.Operation.RECEIVE)
+            receiveTimeout?.let(handler::removeCallbacks)
+            receiveTimeout = Runnable { fail("timeout: reassembly") }.also { handler.postDelayed(it, 15_000) }
         }
         require(receiveId == id && receiveCount == count && receiveIndex == index) {
             "Out-of-order frame"
@@ -598,6 +693,8 @@ class BleRelaySession(
         receiveIndex++
         if (receiveIndex == count) {
             val message = received.toByteArray()
+            incomingAckPending = true
+            if (role == Role.PERIPHERAL) clearDeadline()
             acknowledgement = byteArrayOf(
                 1,
                 id.toByte(),
@@ -607,16 +704,21 @@ class BleRelaySession(
             emit(mapOf("event" to "message", "connectionId" to connectionId,
                 "message" to message))
             resetReceive()
-            clearDeadline(BleDeadlines.Operation.RECEIVE)
+            receiveTimeout?.let(handler::removeCallbacks)
+            receiveTimeout = null
             if (!fromCentral) writeAckToServer()
         }
     }
 
     private fun writeAckToServer() {
-        val characteristic = requireNotNull(ack)
-        characteristic.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
-        characteristic.value = acknowledgement
-        check(gatt?.writeCharacteristic(characteristic) == true) { "ACK write rejected" }
+        val value = acknowledgement.clone()
+        queueClientOperation {
+            ackWriteTimeout = Runnable { fail("timeout: acknowledgement write") }.also { handler.postDelayed(it, 15_000) }
+            val characteristic = requireNotNull(ack)
+            characteristic.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+            characteristic.value = value
+            check(gatt?.writeCharacteristic(characteristic) == true) { "ACK write rejected" }
+        }
     }
 
     private fun resetReceive() {
@@ -634,13 +736,25 @@ class BleRelaySession(
     private fun stop(reason: String, notify: Boolean) {
         if (!active) return
         active = false
-        deadlines.clearAll()
+        clearDeadline()
+        sendTimeout?.let(handler::removeCallbacks)
+        receiveTimeout?.let(handler::removeCallbacks)
+        ackWriteTimeout?.let(handler::removeCallbacks)
+        sendTimeout = null
+        receiveTimeout = null
+        ackWriteTimeout = null
+        clientOperations.clear()
+        clientBusy = false
+        release { context.unregisterReceiver(radioReceiver) }
         pendingConnect?.error("ble_error", reason, null)
         pendingConnect = null
         pendingAdvertise?.error("ble_error", reason, null)
         pendingAdvertise = null
         pendingSend?.error("ble_error", reason, null)
         pendingSend = null
+        pendingClose?.success(null)
+        pendingClose = null
+        incomingAckPending = false
         if (scanning) release { adapter.bluetoothLeScanner?.stopScan(scanCallback) }
         if (advertising) release { advertiser?.stopAdvertising(advertiseCallback) }
         release { gatt?.disconnect() }

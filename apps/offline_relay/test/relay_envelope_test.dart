@@ -31,6 +31,17 @@ void main() {
     expect(ids.every((id) => id.isNotEmpty), isTrue);
   });
 
+  test('end_chat is a versioned application envelope type', () {
+    final encoded = RelayEnvelope.create(
+      type: RelayMessageType.endChat,
+      body: const {'reason': 'user_ended'},
+    ).encode();
+    final decoded = RelayEnvelope.decode(encoded);
+    expect(decoded.version, 1);
+    expect(decoded.type, RelayMessageType.endChat);
+    expect(decoded.body, {'reason': 'user_ended'});
+  });
+
   test('accepts exactly 256 encoded bytes and rejects 257', () {
     const id = 'x';
     final base = RelayEnvelope(

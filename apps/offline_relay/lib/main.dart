@@ -1,14 +1,23 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:relay_transport/relay_transport.dart';
 
 import 'relay_demo_controller.dart';
 import 'transport/ble_relay_transport.dart';
+import 'ui/offline_relay_theme.dart';
+import 'ui/screens/home_screen.dart';
+import 'ui/screens/chat_screen.dart';
+import 'ui/screens/nearby_screen.dart';
+import 'ui/screens/profile_screen.dart';
+import 'ui/widgets/relay_bottom_navigation.dart';
 
 void main() => runApp(const OfflineRelayApp());
 
 class OfflineRelayApp extends StatefulWidget {
-  const OfflineRelayApp({super.key});
+  const OfflineRelayApp({super.key, this.transport});
+
+  final RelayTransport? transport;
 
   @override
   State<OfflineRelayApp> createState() => _OfflineRelayAppState();
@@ -17,30 +26,41 @@ class OfflineRelayApp extends StatefulWidget {
 class _OfflineRelayAppState extends State<OfflineRelayApp> {
   late final RelayDemoController _controller;
   final _nameController = TextEditingController();
-  final _chatController = TextEditingController();
-  bool _wasInChat = false;
-  int _chatEpoch = 0;
+  final _messengerKey = GlobalKey<ScaffoldMessengerState>();
+  RelayTab _selectedTab = RelayTab.home;
+  bool _availabilityBusy = false;
 
   @override
   void initState() {
     super.initState();
-    _controller = RelayDemoController(BleRelayTransport());
-    _controller.addListener(_onConversationChanged);
+    _controller = RelayDemoController(widget.transport ?? BleRelayTransport());
+    _controller.addListener(_onControllerChanged);
   }
 
-  void _onConversationChanged() {
-    if (_controller.inChat == _wasInChat) return;
-    ++_chatEpoch;
-    _wasInChat = _controller.inChat;
-    if (!_wasInChat) _chatController.clear();
+  void _onControllerChanged() {
+    if (!mounted) return;
+    final changedName = _nameController.text != _controller.displayName;
+    if (changedName) {
+      _nameController.value = TextEditingValue(
+        text: _controller.displayName,
+        selection: TextSelection.collapsed(
+          offset: _controller.displayName.length,
+        ),
+      );
+    }
+    if (_controller.hasIncomingRequest &&
+        !_controller.inChat &&
+        _selectedTab != RelayTab.nearby) {
+      setState(() => _selectedTab = RelayTab.nearby);
+    }
   }
 
   @override
   void dispose() {
-    _controller.removeListener(_onConversationChanged);
-    _controller.dispose();
+    _controller
+      ..removeListener(_onControllerChanged)
+      ..dispose();
     _nameController.dispose();
-    _chatController.dispose();
     super.dispose();
   }
 
@@ -49,284 +69,138 @@ class _OfflineRelayAppState extends State<OfflineRelayApp> {
       await action();
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      _controller.reportError(error);
+      _messengerKey.currentState?.showSnackBar(
         SnackBar(
-          content: Text(error.toString().replaceFirst('Bad state: ', '')),
+          content: Text(_controller.errorMessage ?? 'Please try again.'),
+          backgroundColor: RelayColors.greenDark,
         ),
       );
+    }
+  }
+
+  Future<void> _findNearby() async {
+    if (_controller.isConnecting ||
+        _controller.isWaitingForAcceptance ||
+        _controller.hasIncomingRequest) {
+      setState(() => _selectedTab = RelayTab.nearby);
+      return;
+    }
+    if (_controller.displayName.trim().isEmpty) {
+      setState(() => _selectedTab = RelayTab.profile);
+      _messengerKey.currentState?.showSnackBar(
+        const SnackBar(
+          content: Text('Add your name in Profile to get started.'),
+        ),
+      );
+      return;
+    }
+    await _run(() async {
+      if (_controller.isOffering) await _controller.stopOfferingHelp();
+      _controller.updateProfile(
+        name: _controller.displayName,
+        role: RelayUserRole.offlineUser,
+      );
+      setState(() => _selectedTab = RelayTab.nearby);
+      await _controller.findNearbyHelpers();
+    });
+  }
+
+  Future<void> _setAvailability(bool enabled) async {
+    if (_availabilityBusy) return;
+    if (enabled && _controller.displayName.trim().isEmpty) {
+      _messengerKey.currentState?.showSnackBar(
+        const SnackBar(
+          content: Text('Add your name before enabling Help Others.'),
+        ),
+      );
+      return;
+    }
+    setState(() => _availabilityBusy = true);
+    try {
+      if (enabled) {
+        _controller.updateProfile(
+          name: _controller.displayName,
+          role: RelayUserRole.internetHelper,
+        );
+        await _controller.offerHelp();
+      } else {
+        await _controller.stopOfferingHelp();
+      }
+      _controller.clearError();
+    } catch (error) {
+      _controller.reportError(error);
+      if (mounted) {
+        _messengerKey.currentState?.showSnackBar(
+          SnackBar(
+            content: Text(error.toString().replaceFirst('Bad state: ', '')),
+            backgroundColor: RelayColors.greenDark,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _availabilityBusy = false);
     }
   }
 
   @override
   Widget build(BuildContext context) => MaterialApp(
     title: 'OfflineRelay',
-    theme: ThemeData(colorSchemeSeed: Colors.teal, useMaterial3: true),
+    debugShowCheckedModeBanner: false,
+    scaffoldMessengerKey: _messengerKey,
+    theme: buildOfflineRelayTheme(),
     home: AnimatedBuilder(
       animation: _controller,
       builder: (context, _) {
-        final inChat = _controller.inChat;
+        if (_controller.inChat || _controller.isChatTerminal) {
+          return ChatScreen(
+            controller: _controller,
+            onEndChat: () => _run(_controller.endChat),
+            onReturnToNearby: () => _run(() async {
+              await _controller.returnToNearby();
+              if (mounted) setState(() => _selectedTab = RelayTab.nearby);
+            }),
+            onSubmitReport: (reason, note) => _run(() async {
+              _controller.submitLocalReport(reason: reason, note: note);
+            }),
+          );
+        }
         return Scaffold(
-          appBar: AppBar(
-            leading: inChat
-                ? IconButton(
-                    tooltip: 'Back to Nearby Users',
-                    onPressed: () => _run(_controller.returnToNearby),
-                    icon: const Icon(Icons.arrow_back),
-                  )
-                : null,
-            title: Text(
-              inChat
-                  ? 'Chat with ${_controller.remoteName ?? 'Nearby user'}'
-                  : 'Nearby Users',
-            ),
-          ),
-          body: SafeArea(
-            child: inChat ? _chatScreen(context) : _nearbyScreen(),
+          backgroundColor: RelayColors.canvas,
+          body: SafeArea(child: _selectedScreen()),
+          bottomNavigationBar: RelayBottomNavigation(
+            selected: _selectedTab,
+            onSelected: (tab) {
+              _controller.clearError();
+              setState(() => _selectedTab = tab);
+            },
           ),
         );
       },
     ),
   );
 
-  Widget _nearbyScreen() {
-    final c = _controller;
-    return ListView(
-      padding: const EdgeInsets.all(20),
-      children: [
-        const Text(
-          'Connect directly with people nearby, even without mobile data.',
-          style: TextStyle(fontSize: 16),
-        ),
-        const SizedBox(height: 20),
-        TextField(
-          controller: _nameController,
-          maxLength: 24,
-          textCapitalization: TextCapitalization.words,
-          decoration: const InputDecoration(
-            labelText: 'Your display name',
-            border: OutlineInputBorder(),
-            counterText: '',
-          ),
-          onChanged: (name) => c.updateProfile(name: name, role: c.role),
-        ),
-        const SizedBox(height: 12),
-        DropdownButtonFormField<RelayUserRole>(
-          initialValue: c.role,
-          decoration: const InputDecoration(
-            labelText: 'Your role',
-            border: OutlineInputBorder(),
-          ),
-          items: const [
-            DropdownMenuItem(
-              value: RelayUserRole.offlineUser,
-              child: Text('Offline User'),
-            ),
-            DropdownMenuItem(
-              value: RelayUserRole.internetHelper,
-              child: Text('Internet Helper'),
-            ),
-          ],
-          onChanged: (role) {
-            if (role == null) return;
-            c.updateProfile(name: _nameController.text, role: role);
-          },
-        ),
-        const SizedBox(height: 16),
-        FilledButton.icon(
-          onPressed: c.isConnecting
-              ? null
-              : () => _run(
-                  c.role == RelayUserRole.offlineUser
-                      ? c.findNearbyHelpers
-                      : c.isOffering
-                      ? c.stopOfferingHelp
-                      : c.offerHelp,
-                ),
-          icon: Icon(
-            c.role == RelayUserRole.offlineUser
-                ? Icons.radar
-                : Icons.volunteer_activism,
-          ),
-          label: Text(
-            c.role == RelayUserRole.offlineUser
-                ? 'Find Nearby Helpers'
-                : c.isOffering
-                ? 'Disable Help Others'
-                : 'Enable Help Others',
-          ),
-        ),
-        const SizedBox(height: 12),
-        _StatusCard(message: c.status),
-        if (c.isOffering) ...[
-          const SizedBox(height: 12),
-          const Card(
-            child: ListTile(
-              leading: Icon(Icons.bluetooth_searching),
-              title: Text('Advertising for nearby users'),
-              subtitle: Text('You can leave OfflineRelay while available.'),
-            ),
-          ),
-        ],
-        if (c.isWaitingForAcceptance) ...[
-          const SizedBox(height: 12),
-          const LinearProgressIndicator(),
-        ],
-        if (c.hasIncomingRequest) ...[
-          const SizedBox(height: 12),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '${c.incomingPeerName ?? 'A nearby user'} wants to connect',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: FilledButton(
-                          onPressed: () => _run(c.acceptIncomingRequest),
-                          child: const Text('Accept'),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () => _run(c.rejectIncomingRequest),
-                          child: const Text('Reject'),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-        if (c.peers.isNotEmpty) ...[
-          const SizedBox(height: 20),
-          Text(
-            'Nearby Internet Helpers',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          for (final peer in c.peers)
-            Card(
-              child: ListTile(
-                leading: const CircleAvatar(child: Icon(Icons.person)),
-                title: Text(peer.label),
-                subtitle: const Text('Internet Helper · Bluetooth nearby'),
-                trailing: FilledButton.tonal(
-                  onPressed: c.isConnecting
-                      ? null
-                      : () => _run(() => c.connectTo(peer)),
-                  child: const Text('Connect'),
-                ),
-              ),
-            ),
-        ],
-      ],
-    );
-  }
-
-  Widget _chatScreen(BuildContext context) {
-    final c = _controller;
-    return Column(
-      children: [
-        if (c.messages.length >= RelayDemoController.maxHistoryMessages)
-          const Padding(
-            padding: EdgeInsets.all(8),
-            child: Text('Showing the newest 300 messages in this conversation.'),
-          ),
-        Expanded(
-          child: c.messages.isEmpty
-              ? const Center(child: Text('Connected. Start a conversation.'))
-              : ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: c.messages.length,
-                  itemBuilder: (context, index) =>
-                      _messageBubble(context, c.messages[index]),
-                ),
-        ),
-        SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _chatController,
-                    textInputAction: TextInputAction.send,
-                    maxLength: 160,
-                    decoration: const InputDecoration(
-                      hintText: 'Message',
-                      border: OutlineInputBorder(),
-                      counterText: '',
-                    ),
-                    onSubmitted: (_) => _sendChat(),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                IconButton.filled(
-                  tooltip: 'Send message',
-                  onPressed: _sendChat,
-                  icon: const Icon(Icons.send),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _messageBubble(
-    BuildContext context,
-    RelayConversationMessage message,
-  ) {
-    return Align(
-      alignment: message.fromLocalUser
-          ? Alignment.centerRight
-          : Alignment.centerLeft,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 320),
-        child: Card(
-          color: message.fromLocalUser
-              ? Theme.of(context).colorScheme.primaryContainer
-              : Theme.of(context).colorScheme.surfaceContainerHighest,
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Text(message.text),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _sendChat() async {
-    final text = _chatController.text;
-    if (text.trim().isEmpty) return;
-    final epoch = _chatEpoch;
-    await _run(() => _controller.sendChat(text));
-    if (mounted && epoch == _chatEpoch && _chatController.text == text) {
-      _chatController.clear();
-    }
-  }
-}
-
-class _StatusCard extends StatelessWidget {
-  const _StatusCard({required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) => Card(
-    child: ListTile(
-      leading: const Icon(Icons.info_outline),
-      title: Text(message),
+  Widget _selectedScreen() => switch (_selectedTab) {
+    RelayTab.home => HomeScreen(
+      helperAvailable: _controller.isOffering,
+      onFindNearby: _findNearby,
     ),
-  );
+    RelayTab.nearby => NearbyScreen(
+      controller: _controller,
+      onSearch: () => _run(_findNearby),
+      onConnect: (peer) => _run(() => _controller.connectTo(peer)),
+      onAccept: () => _run(_controller.acceptIncomingRequest),
+      onReject: () => _run(_controller.rejectIncomingRequest),
+      onCancelRequest: () => _run(_controller.cancelPendingRequest),
+    ),
+    RelayTab.profile => ProfileScreen(
+      nameController: _nameController,
+      isAvailable: _controller.isOffering,
+      isBusy: _availabilityBusy,
+      onNameChanged: (name) =>
+          _controller.updateProfile(name: name, role: _controller.role),
+      onAvailabilityChanged: _setAvailability,
+      errorMessage: _controller.errorMessage,
+    ),
+  };
 }

@@ -82,14 +82,16 @@ void main() {
     },
   );
   test(
-    'current native-approved request can restore accepted conversation',
+    'matching restored approval closes the connection when its keys are lost',
     () async {
       approve(connection, 'request-B');
       await flush();
-      expect(controller.inChat, isTrue);
+      expect(controller.inChat, isFalse);
+      expect(connection.closed, isTrue);
+      expect(controller.chatEndReason, RelayChatEndReason.connectionLost);
       connection.emit(RelayMessageType.chat, {'text': 'approved'});
       await flush();
-      expect(controller.messages.single.text, 'approved');
+      expect(controller.messages, isEmpty);
     },
   );
   test('late approval after leaving cannot revive a conversation', () async {

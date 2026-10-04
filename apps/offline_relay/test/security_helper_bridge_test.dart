@@ -9,14 +9,17 @@ void main() {
   const methods = MethodChannel('dev.offlinerelay/ble/methods');
   const events = MethodChannel('dev.offlinerelay/ble/events');
   const codec = StandardMethodCodec();
-  late RelayDemoController controller;
   final messenger =
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
-
+  late RelayDemoController controller;
   setUp(() async {
     messenger.setMockMethodCallHandler(methods, (_) async => null);
     messenger.setMockMethodCallHandler(events, (_) async => null);
     controller = RelayDemoController(BleRelayTransport());
+    controller.updateProfile(
+      name: 'Helper',
+      role: RelayUserRole.internetHelper,
+    );
     await Future<void>.delayed(Duration.zero);
   });
   tearDown(() async {
@@ -33,10 +36,7 @@ void main() {
     );
   }
 
-  void snapshot(String? id, {bool accepted = false}) {
-    emit({'event': 'helperState', 'enabled': true, 'displayName': 'Helper'});
-    emit({'event': 'helperSnapshot', 'connectionId': id});
-    if (id == null) return;
+  Future<void> request(String id) async {
     emit({
       'event': 'incomingConnection',
       'connectionId': id,
@@ -55,45 +55,58 @@ void main() {
         body: {'name': id, 'role': 'offline_user'},
       ).encode(),
     });
-    if (accepted) {
-      emit({
-        'event': 'helperAccepted',
-        'connectionId': id,
-        'requestId': 'request-$id',
-        'peerName': id,
-      });
-    }
+    await Future<void>.delayed(Duration.zero);
   }
 
   test(
-    'native snapshot restores approval before queued chat delivery',
+    'unknown native approval cannot close the replacement request',
     () async {
-      snapshot('A', accepted: true);
-      emit({
-        'event': 'message',
-        'connectionId': 'A',
-        'message': RelayEnvelope.create(
-          type: RelayMessageType.chat,
-          body: {'text': 'background test'},
-        ).encode(),
-      });
-      await Future<void>.delayed(Duration.zero);
-      expect(controller.inChat, isTrue);
-      expect(controller.messages.single.text, 'background test');
-    },
-  );
-  test(
-    'replacement snapshot ends old chat before exposing new request',
-    () async {
-      snapshot('A', accepted: true);
-      await Future<void>.delayed(Duration.zero);
-      snapshot('B');
+      await request('B');
       emit({
         'event': 'helperAccepted',
         'connectionId': 'A',
         'requestId': 'request-A',
         'peerName': 'A',
       });
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.incomingRequestId, 'request-B');
+      expect(controller.isChatTerminal, false);
+    },
+  );
+  test('wrong request approval for live connection is ignored', () async {
+    await request('B');
+    emit({
+      'event': 'helperAccepted',
+      'connectionId': 'B',
+      'requestId': 'request-A',
+      'peerName': 'A',
+    });
+    await Future<void>.delayed(Duration.zero);
+    expect(controller.incomingRequestId, 'request-B');
+    expect(controller.isChatTerminal, false);
+  });
+  test(
+    'matching restored approval fails closed instead of reusing lost keys',
+    () async {
+      await request('B');
+      emit({
+        'event': 'helperAccepted',
+        'connectionId': 'B',
+        'requestId': 'request-B',
+        'peerName': 'B',
+      });
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.inChat, false);
+      expect(controller.chatEndReason, RelayChatEndReason.connectionLost);
+    },
+  );
+  test(
+    'disconnect followed by a new request keeps sessions separate',
+    () async {
+      await request('A');
+      emit({'event': 'disconnected', 'connectionId': 'A'});
+      await Future<void>.delayed(Duration.zero);
+      await request('B');
       emit({
         'event': 'message',
         'connectionId': 'A',
@@ -103,52 +116,8 @@ void main() {
         ).encode(),
       });
       await Future<void>.delayed(Duration.zero);
-      expect(controller.inChat, isFalse);
       expect(controller.incomingRequestId, 'request-B');
       expect(controller.messages, isEmpty);
     },
   );
-  test(
-    'empty snapshot clears a conversation ended while UI detached',
-    () async {
-      snapshot('A', accepted: true);
-      await Future<void>.delayed(Duration.zero);
-      snapshot(null);
-      await Future<void>.delayed(Duration.zero);
-      expect(controller.inChat, isFalse);
-      expect(controller.remoteName, isNull);
-    },
-  );
-  test('same live snapshot preserves existing approved chat', () async {
-    snapshot('A', accepted: true);
-    await Future<void>.delayed(Duration.zero);
-    await controller.sendChat('synthetic local');
-    snapshot('A', accepted: true);
-    await Future<void>.delayed(Duration.zero);
-    expect(controller.inChat, isTrue);
-    expect(controller.messages.single.text, 'synthetic local');
-  });
-  test('idle iOS snapshot preserves offline user role', () async {
-    controller.role = RelayUserRole.offlineUser;
-    emit({'event': 'helperSnapshot', 'connectionId': null});
-    await Future<void>.delayed(Duration.zero);
-    expect(controller.role, RelayUserRole.offlineUser);
-    expect(controller.inChat, isFalse);
-  });
-  test('iOS empty replay clears detached chat without availability event', () async {
-    snapshot('A', accepted: true);
-    await Future<void>.delayed(Duration.zero);
-    await controller.sendChat('synthetic history');
-    emit({'event': 'helperSnapshot', 'connectionId': null});
-    emit({
-      'event': 'helperAccepted',
-      'connectionId': 'A',
-      'requestId': 'request-A',
-      'peerName': 'A',
-    });
-    await Future<void>.delayed(Duration.zero);
-    expect(controller.inChat, isFalse);
-    expect(controller.messages, isEmpty);
-    expect(controller.remoteName, isNull);
-  });
 }

@@ -118,3 +118,9 @@ This work aims to preserve user approval, keep conversations separate, and bound
 unfinished BLE operations in the already implemented chat. It does not build new
 product features or claim authenticated private transport. Actual demonstrated
 results are recorded separately as verification completes.
+# Current Android update
+
+The encrypted Android implementation at upstream `0d4e2c4` was approved for
+hardening on Security. See [current Android evidence](ANDROID_CURRENT.md).
+Descriptions/results below are historical snapshots and must not be combined
+with newer build claims. Prepared native iOS changes remain separate and pending.

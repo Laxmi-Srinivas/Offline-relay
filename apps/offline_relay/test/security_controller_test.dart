@@ -1,324 +1,162 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:offline_relay/relay_demo_controller.dart';
+import 'package:offline_relay/security/relay_secure_session.dart';
 import 'package:relay_transport/relay_transport.dart';
 
 void main() {
-  late TestTransport transport;
-  late RelayDemoController controller;
-
-  setUp(() {
-    transport = TestTransport();
-    controller = RelayDemoController(transport);
-  });
-
-  tearDown(() async {
-    controller.dispose();
-    await flush();
-  });
-
-  Future<TestConnection> incoming() async {
-    controller.updateProfile(
-      name: 'Helper',
-      role: RelayUserRole.internetHelper,
-    );
-    await controller.offerHelp();
-    final connection = TestConnection('incoming');
-    transport.incoming.add(connection);
-    await flush();
-    return connection;
-  }
-
-  Future<TestConnection> outgoing({bool accept = true}) async {
-    controller.updateProfile(name: 'User', role: RelayUserRole.offlineUser);
-    final connection = transport.nextConnection;
-    await controller.connectTo(connection.peer);
-    if (accept) {
-      final request = RelayEnvelope.decode(connection.sent.single);
-      connection.emit(RelayMessageType.connectionAccept, {
-        'requestId': request.id,
-      });
-      await flush();
+  test('encrypted incoming history retains newest 300 messages', () async {
+    final f = await SecureFixture.connect();
+    try {
+      for (var i = 0; i < 310; i++) {
+        await f.receive('message-$i');
+      }
+      expect(f.controller.messages.length, 300);
+      expect(f.controller.messages.first.text, 'message-10');
+      expect(f.controller.messages.last.text, 'message-309');
+    } finally {
+      f.dispose();
     }
-    return connection;
-  }
-
-  test('missing request ID cannot bypass helper approval', () async {
-    final connection = await incoming();
-    connection.emit(RelayMessageType.connectionAccept, {});
+  });
+  test('local encrypted sends use the same history bound', () async {
+    final f = await SecureFixture.connect();
+    try {
+      for (var i = 0; i < 310; i++) {
+        await f.controller.sendChat('local-$i');
+      }
+      expect(f.controller.messages.length, 300);
+      expect(f.controller.messages.first.text, 'local-10');
+    } finally {
+      f.dispose();
+    }
+  });
+  test('plaintext chat cannot bypass approval or encryption', () async {
+    final t = TestTransport();
+    final c = RelayDemoController(t);
+    c.updateProfile(name: 'User', role: RelayUserRole.offlineUser);
+    await c.connectTo(t.nextConnection.peer);
+    t.nextConnection.emit(RelayMessageType.chat, {'text': 'unapproved'});
+    t.nextConnection.emit(RelayMessageType.connectionAccept, {});
     await flush();
-    expect(controller.inChat, isFalse);
-    expect(controller.messages, isEmpty);
-  });
-
-  testWidgets('subscribed peer without a request expires and frees the slot', (
-    tester,
-  ) async {
-    controller.dispose();
-    transport = TestTransport();
-    controller = RelayDemoController(transport);
-    controller.updateProfile(
-      name: 'Helper',
-      role: RelayUserRole.internetHelper,
-    );
-    await controller.offerHelp();
-    final idle = TestConnection('idle');
-    transport.incoming.add(idle);
-    await tester.pump();
-    await tester.pump(const Duration(seconds: 14));
-    expect(idle.closed, isFalse);
-    await tester.pump(const Duration(seconds: 1));
-    expect(idle.closed, isTrue);
-    expect(controller.hasIncomingRequest, isFalse);
-    await controller.offerHelp();
-    final next = TestConnection('next');
-    transport.incoming.add(next);
-    await tester.pump();
-    next.emit(RelayMessageType.connectionRequest, {
-      'name': 'Next',
-      'role': 'offline_user',
-    });
-    await tester.pump();
-    expect(controller.hasIncomingRequest, isTrue);
-    expect(next.closed, isFalse);
-  });
-
-  testWidgets('valid request cancels setup timer while user decides', (
-    tester,
-  ) async {
-    controller.dispose();
-    transport = TestTransport();
-    controller = RelayDemoController(transport);
-    controller.updateProfile(
-      name: 'Helper',
-      role: RelayUserRole.internetHelper,
-    );
-    await controller.offerHelp();
-    final peer = TestConnection('request');
-    transport.incoming.add(peer);
-    await tester.pump();
-    peer.emit(RelayMessageType.connectionRequest, {
-      'name': 'User',
-      'role': 'offline_user',
-    });
-    await tester.pump();
-    await tester.pump(const Duration(seconds: 30));
-    expect(peer.closed, isFalse);
-    expect(controller.hasIncomingRequest, isTrue);
-  });
-
-  test('chat is ignored until helper approval', () async {
-    final connection = await incoming();
-    connection.emit(RelayMessageType.chat, {'text': 'unsolicited'});
-    connection.emit(RelayMessageType.connectionRequest, {
-      'name': 'User',
-      'role': 'offline_user',
-    });
+    expect(c.inChat, false);
+    expect(c.messages, isEmpty);
+    c.dispose();
+    final f = await SecureFixture.connect();
+    f.connection.emit(RelayMessageType.chat, {'text': 'plaintext'});
     await flush();
-    expect(controller.messages, isEmpty);
-    await controller.acceptIncomingRequest();
-    expect(controller.inChat, isTrue);
-    connection.emit(RelayMessageType.chat, {'text': 'approved'});
-    await flush();
-    expect(controller.messages.single.text, 'approved');
+    expect(f.controller.messages, isEmpty);
+    f.dispose();
   });
-
-  test('outgoing chat cannot be sent before acceptance', () async {
-    final connection = await outgoing(accept: false);
-    await expectLater(controller.sendChat('too soon'), throwsStateError);
-    expect(connection.sent, hasLength(1));
-    expect(controller.messages, isEmpty);
-  });
-
-  test('duplicate control messages cannot end an accepted chat', () async {
-    final connection = await outgoing();
-    final request = RelayEnvelope.decode(connection.sent.first);
-    connection.emit(RelayMessageType.connectionReject, {
-      'requestId': request.id,
-    });
-    await flush();
-    expect(controller.inChat, isTrue);
-    expect(connection.closed, isFalse);
-  });
-
   test(
-    'repeated chat ID cannot add or replace the displayed message',
+    'tampered encrypted chat is never displayed and closes the session',
     () async {
-      final connection = await outgoing();
-      connection.emit(RelayMessageType.chat, {'text': 'first'}, id: 'same');
-      connection.emit(RelayMessageType.chat, {'text': 'changed'}, id: 'same');
-      await flush();
-      expect(controller.messages, hasLength(1));
-      expect(controller.messages.single.text, 'first');
+      final f = await SecureFixture.connect();
+      final e = await f.encrypted('synthetic marker');
+      final bytes = base64Url.decode(
+        base64Url.normalize(e.body['c'] as String),
+      );
+      bytes[0] ^= 1;
+      f.connection.inbox.add(
+        RelayEnvelope(
+          id: e.id,
+          type: e.type,
+          body: {'n': e.body['n'], 'c': base64Url.encode(bytes)},
+        ).encode(),
+      );
+      await waitFor(() => f.controller.isChatTerminal);
+      expect(f.controller.messages, isEmpty);
+      expect(f.controller.chatEndReason, RelayChatEndReason.securityFailed);
+      f.dispose();
     },
   );
-
-  test('incoming history retains only the newest 300 messages', () async {
-    final connection = await outgoing();
-    for (var i = 0; i < 320; i++) {
-      connection.emit(RelayMessageType.chat, {'text': 'message $i'}, id: '$i');
-    }
-    await flush();
-    expect(controller.messages, hasLength(300));
-    expect(controller.messages.first.text, 'message 20');
-    expect(controller.messages.last.text, 'message 319');
+  test('replayed encrypted packet is not displayed twice', () async {
+    final f = await SecureFixture.connect();
+    final e = await f.encrypted('once');
+    f.connection.inbox.add(e.encode());
+    await waitFor(() => f.controller.messages.length == 1);
+    f.connection.inbox.add(e.encode());
+    await waitFor(() => f.controller.isChatTerminal);
+    expect(f.controller.messages.map((m) => m.text), ['once']);
+    f.dispose();
   });
-
-  test('local sends use the same 300-message history limit', () async {
-    await outgoing();
-    for (var i = 0; i < 305; i++) {
-      await controller.sendChat('local $i');
-    }
-    expect(controller.messages, hasLength(300));
-    expect(controller.messages.first.text, 'local 5');
-    expect(controller.messages.last.text, 'local 304');
-  });
-
   test(
-    'duplicate tracking resets for a different accepted conversation',
+    'receive work overflow closes the offending connection and recovers',
     () async {
-      final old = await outgoing();
-      old.emit(RelayMessageType.chat, {'text': 'old'}, id: 'same');
-      await flush();
-      await controller.returnToNearby();
-      transport.nextConnection = TestConnection('new');
-      final next = await outgoing();
-      next.emit(RelayMessageType.chat, {'text': 'new'}, id: 'same');
-      await flush();
-      expect(controller.messages.single.text, 'new');
-    },
-  );
-
-  test(
-    'duplicate suppression is a bounded recent window, not permanent history',
-    () async {
-      final connection = await outgoing();
-      for (var i = 0; i < 1025; i++) {
-        connection.emit(RelayMessageType.chat, {
-          'text': 'message $i',
-        }, id: '$i');
+      final f = await SecureFixture.connect();
+      for (var i = 0; i < 100; i++) {
+        f.connection.emit(RelayMessageType.chat, {'text': 'not encrypted'});
       }
       await flush();
-      connection.emit(RelayMessageType.chat, {
-        'text': 'recent replay',
-      }, id: '1024');
-      await flush();
-      expect(controller.messages.last.text, 'message 1024');
-      connection.emit(RelayMessageType.chat, {
-        'text': 'outside window',
-      }, id: '0');
-      await flush();
-      expect(controller.messages.last.text, 'outside window');
-      expect(controller.messages, hasLength(300));
+      expect(f.connection.closed, true);
+      expect(f.controller.inChat, false);
+      await f.controller.returnToNearby();
+      expect(f.controller.messages, isEmpty);
+      expect(f.controller.isChatTerminal, false);
+      f.dispose();
     },
   );
-
-  test('repeated requests cannot change the peer awaiting approval', () async {
-    final connection = await incoming();
-    connection.emit(RelayMessageType.connectionRequest, {
-      'name': 'First',
-      'role': 'offline_user',
-    }, id: 'first');
-    await flush();
-    connection.emit(RelayMessageType.connectionRequest, {
-      'name': 'Changed',
-      'role': 'offline_user',
-    }, id: 'second');
-    await flush();
-    expect(controller.incomingRequestId, 'first');
-    expect(controller.incomingPeerName, 'First');
+  test('late connect after leaving cannot install an old session', () async {
+    final t = TestTransport();
+    final done = Completer<RelayConnection>();
+    t.connectCompletion = done;
+    final c = RelayDemoController(t);
+    c.updateProfile(name: 'User', role: RelayUserRole.offlineUser);
+    final connecting = c.connectTo(t.nextConnection.peer);
+    await c.returnToNearby();
+    done.complete(t.nextConnection);
+    await connecting;
+    expect(t.nextConnection.closed, true);
+    expect(t.nextConnection.sent, isEmpty);
+    expect(c.isWaitingForAcceptance, false);
+    c.dispose();
   });
-
-  test('disconnect clears chat state before another conversation', () async {
-    final old = await outgoing();
-    old.emit(RelayMessageType.chat, {'text': 'old conversation'});
-    await flush();
-    expect(controller.messages, hasLength(1));
-    await old.inbox.close();
-    await flush();
-    expect(controller.messages, isEmpty);
-    expect(controller.remoteName, isNull);
-    expect(controller.inChat, isFalse);
-    transport.nextConnection = TestConnection('new');
-    await outgoing();
-    expect(controller.inChat, isTrue);
-    expect(controller.messages, isEmpty);
-  });
-
-  test('a disconnected incoming peer does not block the next peer', () async {
-    final old = await incoming();
-    await old.inbox.close();
-    await flush();
-    final next = await incoming();
-    next.emit(RelayMessageType.connectionRequest, {
-      'name': 'Next',
-      'role': 'offline_user',
-    });
-    await flush();
-    expect(controller.hasIncomingRequest, isTrue);
-    expect(next.closed, isFalse);
-  });
-
   test(
-    'send completion after leaving chat cannot repopulate history',
+    'late acceptance completion cannot revive a departed conversation',
     () async {
-      final connection = await outgoing();
-      final completion = Completer<void>();
-      connection.sendCompletion = completion;
-      final send = controller.sendChat('pending');
-      await controller.returnToNearby();
-      completion.complete();
-      await send;
-      expect(controller.inChat, isFalse);
-      expect(controller.messages, isEmpty);
-    },
-  );
-
-  test('accept completion after leaving chat cannot restore chat', () async {
-    final connection = await incoming();
-    connection.emit(RelayMessageType.connectionRequest, {
-      'name': 'User',
-      'role': 'offline_user',
-    });
-    await flush();
-    final completion = Completer<void>();
-    connection.sendCompletion = completion;
-    final accept = controller.acceptIncomingRequest();
-    await flush();
-    await controller.returnToNearby();
-    completion.complete();
-    await accept;
-    expect(controller.inChat, isFalse);
-    expect(controller.remoteName, isNull);
-  });
-
-  test(
-    'connect completion after leaving cannot install a stale session',
-    () async {
-      controller.updateProfile(name: 'User', role: RelayUserRole.offlineUser);
-      final completion = Completer<RelayConnection>();
-      transport.connectCompletion = completion;
-      final connect = controller.connectTo(transport.nextConnection.peer);
-      await controller.returnToNearby();
-      completion.complete(transport.nextConnection);
-      await connect;
-      expect(controller.inChat, isFalse);
-      expect(controller.isWaitingForAcceptance, isFalse);
-      expect(transport.nextConnection.closed, isTrue);
-      expect(transport.nextConnection.sent, isEmpty);
+      final t = TestTransport();
+      final c = RelayDemoController(t);
+      c.updateProfile(name: 'Helper', role: RelayUserRole.internetHelper);
+      await c.offerHelp();
+      final peer = TestConnection('incoming');
+      t.incoming.add(peer);
+      await flush();
+      peer.emit(RelayMessageType.connectionRequest, {
+        'name': 'User',
+        'role': 'offline_user',
+      });
+      await flush();
+      final blocked = Completer<void>();
+      t.stopAdvertisingCompletion = blocked;
+      final accepting = c.acceptIncomingRequest();
+      await flush();
+      await c.returnToNearby();
+      blocked.complete();
+      await accepting;
+      expect(c.inChat, false);
+      expect(c.remoteName, isNull);
+      c.dispose();
     },
   );
 }
 
 Future<void> flush() => Future<void>.delayed(Duration.zero);
+Future<void> waitFor(bool Function() condition) async {
+  for (var i = 0; i < 200; i++) {
+    if (condition()) return;
+    await Future<void>.delayed(const Duration(milliseconds: 2));
+  }
+  fail('Expected security state did not arrive');
+}
 
 class TestTransport implements RelayTransport {
   final incoming = StreamController<RelayConnection>.broadcast();
   TestConnection nextConnection = TestConnection('outgoing');
   Completer<RelayConnection>? connectCompletion;
-
+  Completer<void>? stopAdvertisingCompletion;
+  bool _blockStopOnce = true;
   @override
   Stream<RelayConnection> get incomingConnections => incoming.stream;
   @override
@@ -331,7 +169,13 @@ class TestTransport implements RelayTransport {
   @override
   Future<void> advertise(RelayProfile profile) async {}
   @override
-  Future<void> stopAdvertising() async {}
+  Future<void> stopAdvertising() async {
+    if (_blockStopOnce && stopAdvertisingCompletion != null) {
+      _blockStopOnce = false;
+      await stopAdvertisingCompletion!.future;
+    }
+  }
+
   @override
   Future<void> dispose() => incoming.close();
 }
@@ -345,11 +189,9 @@ class TestConnection implements RelayConnection {
       );
   @override
   final RelayPeer peer;
-  final inbox = StreamController<Uint8List>.broadcast();
+  final inbox = StreamController<Uint8List>.broadcast(sync: true);
   final sent = <Uint8List>[];
   bool closed = false;
-  Completer<void>? sendCompletion;
-
   @override
   int get maxMessageBytes => relayMaxMessageBytes;
   @override
@@ -358,7 +200,6 @@ class TestConnection implements RelayConnection {
   Future<void> send(Uint8List bytes) async {
     if (closed) throw StateError('closed');
     sent.add(bytes);
-    await sendCompletion?.future;
   }
 
   void emit(RelayMessageType type, Map<String, Object?> body, {String? id}) {
@@ -373,5 +214,74 @@ class TestConnection implements RelayConnection {
   @override
   Future<void> close() async {
     closed = true;
+  }
+}
+
+class SecureFixture {
+  SecureFixture(this.controller, this.transport, this.remote);
+  final RelayDemoController controller;
+  final TestTransport transport;
+  final RelaySecureSession remote;
+  TestConnection get connection => transport.nextConnection;
+  static Future<SecureFixture> connect() async {
+    final t = TestTransport();
+    final c = RelayDemoController(t);
+    c.updateProfile(name: 'Requester', role: RelayUserRole.offlineUser);
+    await c.connectTo(t.nextConnection.peer);
+    final request = RelayEnvelope.decode(t.nextConnection.sent.single);
+    t.nextConnection.emit(RelayMessageType.connectionAccept, {
+      'requestId': request.id,
+    });
+    await waitFor(() => t.nextConnection.sent.length >= 2);
+    final key = t.nextConnection.sent
+        .map(RelayEnvelope.decode)
+        .firstWhere((e) => e.type == RelayMessageType.keyExchange);
+    final remote = await RelaySecureSession.create(isInitiator: false);
+    final publicKey = await remote.publicKeyBase64;
+    await remote.establish(key.body['publicKey'] as String);
+    t.nextConnection.emit(RelayMessageType.keyExchange, {
+      'publicKey': publicKey,
+    });
+    final frame = await remote.encrypt(
+      utf8.encode(
+        jsonEncode({
+          't': 'key_confirmation',
+          'b': {'confirm': true},
+        }),
+      ),
+    );
+    t.nextConnection.emit(RelayMessageType.secureMessage, {
+      'n': frame.counter,
+      'c': frame.ciphertext,
+    });
+    await waitFor(() => c.securityState == RelaySecurityState.ready);
+    return SecureFixture(c, t, remote);
+  }
+
+  Future<RelayEnvelope> encrypted(String text) async {
+    final frame = await remote.encrypt(
+      utf8.encode(
+        jsonEncode({
+          't': 'chat',
+          'b': {'text': text},
+        }),
+      ),
+    );
+    return RelayEnvelope(
+      id: 'r${frame.counter}',
+      type: RelayMessageType.secureMessage,
+      body: {'n': frame.counter, 'c': frame.ciphertext},
+    );
+  }
+
+  Future<void> receive(String text) async {
+    final previous = controller.messages.lastOrNull?.text;
+    connection.inbox.add((await encrypted(text)).encode());
+    await waitFor(() => controller.messages.lastOrNull?.text != previous);
+  }
+
+  void dispose() {
+    remote.close();
+    controller.dispose();
   }
 }
