@@ -3,13 +3,20 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:relay_transport/relay_transport.dart';
 
+import 'helper_availability.dart';
+
 /// Flutter bridge for the Android GATT transport in the host application.
 /// The method/event channel names are private to this app.
-final class BleRelayTransport implements RelayTransport {
+final class BleRelayTransport
+    implements RelayTransport, HelperAvailabilityControl {
   static const _methods = MethodChannel('dev.offlinerelay/ble/methods');
   static const _events = EventChannel('dev.offlinerelay/ble/events');
 
   final _incoming = StreamController<RelayConnection>.broadcast();
+  final _availabilityStates =
+      StreamController<HelperAvailabilityState>.broadcast();
+  final _acceptedConnections =
+      StreamController<HelperAcceptedEvent>.broadcast();
   final _discoveries = <StreamController<RelayPeer>>{};
   final _connections = <String, _BleRelayConnection>{};
   late final StreamSubscription<Object?> _eventSubscription;
@@ -25,6 +32,14 @@ final class BleRelayTransport implements RelayTransport {
 
   @override
   Stream<RelayConnection> get incomingConnections => _incoming.stream;
+
+  @override
+  Stream<HelperAvailabilityState> get availabilityStates =>
+      _availabilityStates.stream;
+
+  @override
+  Stream<HelperAcceptedEvent> get acceptedConnections =>
+      _acceptedConnections.stream;
 
   @override
   Stream<RelayPeer> discover() {
@@ -86,6 +101,11 @@ final class BleRelayTransport implements RelayTransport {
     if (!_disposed) await _methods.invokeMethod<void>('stopAdvertising');
   }
 
+  @override
+  Future<void> stopHelperAvailability() async {
+    if (!_disposed) await _methods.invokeMethod<void>('stopHelper');
+  }
+
   void _onEvent(Object? raw) {
     if (raw is! Map<Object?, Object?>) return;
     final event = Map<String, Object?>.from(raw);
@@ -97,11 +117,30 @@ final class BleRelayTransport implements RelayTransport {
         }
         break;
       case 'incomingConnection':
-        final connection = _connectionFrom(
-          event['connectionId'],
-          event['peer'],
-        );
+        final id = event['connectionId'];
+        if (id is String && _connections.containsKey(id)) break;
+        final connection = _connectionFrom(id, event['peer']);
         _incoming.add(connection);
+        break;
+      case 'helperState':
+        _availabilityStates.add(
+          HelperAvailabilityState(
+            enabled: event['enabled'] == true,
+            displayName: event['displayName'] as String?,
+          ),
+        );
+        break;
+      case 'helperAccepted':
+        final id = event['connectionId'];
+        if (id is String) {
+          _acceptedConnections.add(
+            HelperAcceptedEvent(
+              connectionId: id,
+              requestId: event['requestId'] as String?,
+              peerName: event['peerName'] as String? ?? 'Nearby user',
+            ),
+          );
+        }
         break;
       case 'message':
         final id = event['connectionId'];
@@ -186,6 +225,8 @@ final class BleRelayTransport implements RelayTransport {
     _connections.clear();
     await _methods.invokeMethod<void>('dispose');
     await _incoming.close();
+    await _availabilityStates.close();
+    await _acceptedConnections.close();
     for (final controller in _discoveries) {
       await controller.close();
     }

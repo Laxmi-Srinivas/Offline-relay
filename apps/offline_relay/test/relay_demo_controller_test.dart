@@ -5,6 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:offline_relay/relay_demo_controller.dart';
 import 'package:relay_transport/relay_transport.dart';
 
+import 'package:offline_relay/transport/helper_availability.dart';
+
 void main() {
   test(
     'offline user connects, sends a request, and enters chat on accept',
@@ -90,6 +92,30 @@ void main() {
     expect(session.controller.messages.single.fromLocalUser, isFalse);
     await _dispose(session.controller);
   });
+
+  test('helper availability can be restored and explicitly stopped', () async {
+    final transport = _FakeTransport();
+    final controller = RelayDemoController(transport);
+    controller.updateProfile(
+      name: 'Helper',
+      role: RelayUserRole.internetHelper,
+    );
+    await controller.offerHelp();
+    expect(controller.isOffering, isTrue);
+
+    transport.availability.add(
+      const HelperAvailabilityState(enabled: true, displayName: 'Restored'),
+    );
+    await _flushEvents();
+    expect(controller.displayName, 'Restored');
+    expect(controller.role, RelayUserRole.internetHelper);
+    expect(controller.isOffering, isTrue);
+
+    await controller.stopOfferingHelp();
+    expect(transport.stoppedHelperAvailability, isTrue);
+    expect(controller.isOffering, isFalse);
+    await _dispose(controller);
+  });
 }
 
 final _helperPeer = RelayPeer(
@@ -154,14 +180,23 @@ class _OfflineSession {
   final _FakeTransport transport;
 }
 
-class _FakeTransport implements RelayTransport {
+class _FakeTransport implements RelayTransport, HelperAvailabilityControl {
   final incoming = StreamController<RelayConnection>.broadcast();
   final discoveries = StreamController<RelayPeer>.broadcast();
+  final availability = StreamController<HelperAvailabilityState>.broadcast();
+  final accepted = StreamController<HelperAcceptedEvent>.broadcast();
   final connection = _FakeConnection(_helperPeer);
   RelayProfile? advertisedProfile;
+  bool stoppedHelperAvailability = false;
 
   @override
   Stream<RelayConnection> get incomingConnections => incoming.stream;
+
+  @override
+  Stream<HelperAvailabilityState> get availabilityStates => availability.stream;
+
+  @override
+  Stream<HelperAcceptedEvent> get acceptedConnections => accepted.stream;
 
   @override
   Stream<RelayPeer> discover() => discoveries.stream;
@@ -178,9 +213,16 @@ class _FakeTransport implements RelayTransport {
   Future<void> stopAdvertising() async {}
 
   @override
+  Future<void> stopHelperAvailability() async {
+    stoppedHelperAvailability = true;
+  }
+
+  @override
   Future<void> dispose() async {
     await incoming.close();
     await discoveries.close();
+    await availability.close();
+    await accepted.close();
   }
 }
 
