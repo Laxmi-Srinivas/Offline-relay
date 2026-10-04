@@ -91,8 +91,7 @@ class BleRelaySession(
             handler.postDelayed({ stop("local close", notify = true) }, 150)
         }
     }
-    private val clientOperations = java.util.ArrayDeque<() -> Unit>()
-    private var clientBusy = false
+    private val clientOperations = BleOperationQueue()
     private val radioReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.getIntExtra(BluetoothAdapter.EXTRA_STATE, -1) == BluetoothAdapter.STATE_TURNING_OFF) {
@@ -108,20 +107,11 @@ class BleRelaySession(
     }
 
     private fun queueClientOperation(operation: () -> Unit) {
-        clientOperations.addLast(operation)
-        runClientOperation()
-    }
-
-    private fun runClientOperation() {
-        if (!clientBusy && clientOperations.isNotEmpty()) {
-            clientBusy = true
-            clientOperations.removeFirst()()
-        }
+        check(clientOperations.add(operation)) { "Too many pending GATT operations" }
     }
 
     private fun clientOperationDone() {
-        clientBusy = false
-        runClientOperation()
+        clientOperations.complete()
     }
 
     private fun log(name: String, fields: Map<String, Any?> = emptyMap()) {
@@ -744,7 +734,6 @@ class BleRelaySession(
         receiveTimeout = null
         ackWriteTimeout = null
         clientOperations.clear()
-        clientBusy = false
         release { context.unregisterReceiver(radioReceiver) }
         pendingConnect?.error("ble_error", reason, null)
         pendingConnect = null

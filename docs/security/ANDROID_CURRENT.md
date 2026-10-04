@@ -93,6 +93,40 @@ backup and are debuggable; no chat backup leak has been demonstrated.
 
 ## Remaining work and limits
 
+### Native/session follow-up after 451ebbe
+
+| Gap and source at upstream 0d4e2c4 | Existing protection / prerequisites / impact | Minimal fix / evidence |
+| --- | --- | --- |
+| A6 native GATT queue: BleRelaySession.kt 91–122 (`clientOperations`, queue/run/done) | Nearby current peer supplies DATA notifications, causing queued ACK writes while a GATT operation is blocked. Individual frame/message caps and operation deadlines exist; the operation deque itself is unbounded. Medium, confirmed source growth; device exhaustion rate unknown. | A main-thread BleOperationQueue counts in-flight plus waiting operations, maximum 64; overflow follows existing connection-failure handling. Production queue tests cover FIFO, overflow, clear/replacement and 20,000 rejected operations; full APK compilation passed. |
+| A7 detached replacement: BleRelayForegroundService.kt 79–109 attach snapshot; bridge incoming connection map | Existing snapshot filters historical messages, but does not retire Flutter's old helper connection after its disconnect was dropped while detached. Requires a disconnect/reconnect with the UI detached. Medium, confirmed channel regression; OS ordering remains pending. | Emit a current helperSnapshot before live events; prune ended helper connections only. Channel regression failed before fix, passes afterward. A lost-key accepted snapshot closes instead of approving a conversation with missing keys. The no-pending-request restoration regression also failed before its follow-up correction. |
+| A8 alerts / stale send inspection: BleRelayForegroundService.kt 139–157 send completion, 259–288 request inspection, 296–330 outgoing inspection | First request is stable and service queue bounded to 64. Reconnect can raise a new alert without cooldown; old send completion need not match the service's replacement session. Low–medium; callback ordering uncertainty, no device exploit claimed. | Reuse tested monotonic 10-second RequestAlertGate across connections, keep suppressed requests in UI, scope session events/send completions to the current native session and connection, require matching pending request ID. Cooldown resets on service recreation; no claim of radio rate limiting. |
+
+Paths for native references above are under
+`apps/offline_relay/android/app/src/main/kotlin/dev/offlinerelay/offline_relay/ble/`.
+Bridge path: `apps/offline_relay/lib/transport/ble_relay_transport.dart`.
+All validations remain local/controlled; no unrelated devices or live services
+were probed. Controller/native request parsing now agree on a nonempty string
+name and offline_user role; tests reject invalid metadata and request replacement.
+
+Follow-up verification: **60 Flutter tests passed**, analysis found no issues, and
+debug APK build passed. Native runner passed its historical 6 deadline and 9
+helper/buffer checks plus the new seven-operation/cooldown scenarios. Only the new
+BleOperationQueue and RequestAlertGate are integrated in the current native path;
+the old BleDeadlines/HelperConversation checks must NOT be presented as current
+Android runtime coverage. Android framework/GATT policy is additionally compiled
+by the full APK build, not simulated by those pure Kotlin tests.
+
+Latest built APK SHA-256:
+`2DE0748E217510C5E5FCA25D4920A693F3EFA344B7C1E3A920A830FB2D729CF8`.
+Read-only historical secret-pattern triage checked 392 text blobs, skipped 37
+binary blobs and found zero candidates in its five narrow pattern families.
+No comprehensive secret-free or dependency-safe claim follows from that result.
+
+The first integration commit included upstream font-license trailing whitespace
+flagged by diff --check. This follow-up trims that whitespace and retains the
+license text. The earlier commit was not amended or rewritten. Git check results
+are guarded before the next commit; no iOS file is staged.
+
 Native operation queue/notification/session policy review, final APK install and
 owned-device security checks continue next. BLE link encryption/authentication,
 active-intermediary protection, framework storage/logs/backup behavior and practical

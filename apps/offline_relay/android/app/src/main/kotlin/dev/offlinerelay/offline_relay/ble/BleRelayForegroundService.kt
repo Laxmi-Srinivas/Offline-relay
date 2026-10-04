@@ -40,6 +40,7 @@ class BleRelayForegroundService : Service() {
     private val binder = LocalBinder()
     private val queuedEvents = ArrayDeque<Map<String, Any?>>()
     private val notifiedRequestIds = mutableSetOf<String>()
+    private val requestAlertGate = RequestAlertGate()
     private var eventListener: ((Map<String, Any?>) -> Unit)? = null
     private var session: BleRelaySession? = null
     private var profile: Map<String, Any?>? = null
@@ -85,6 +86,7 @@ class BleRelayForegroundService : Service() {
         eventListener = listener
         listener(helperStateEvent())
         val connectionId = activeConnectionId
+        listener(mapOf("event" to "helperSnapshot", "connectionId" to connectionId))
         val peer = activePeer
         val request = pendingRequest
         if (connectionId != null && peer != null) {
@@ -146,7 +148,11 @@ class BleRelayForegroundService : Service() {
         }
         activeSession.send(id, message, object : MethodChannel.Result {
             override fun success(resultValue: Any?) {
-                handleOutgoingEnvelope(message)
+                if (session !== activeSession || !ownsConnection(id)) {
+                    result.error("connection_missing", "Helper conversation ended", null)
+                    return
+                }
+                handleOutgoingEnvelope(id, message)
                 result.success(resultValue)
             }
 
@@ -199,7 +205,11 @@ class BleRelayForegroundService : Service() {
         result: MethodChannel.Result? = null,
     ) {
         session?.dispose()
-        session = BleRelaySession(applicationContext, ::onSessionEvent)
+        lateinit var nextSession: BleRelaySession
+        nextSession = BleRelaySession(applicationContext) {
+            if (session === nextSession) onSessionEvent(it)
+        }
+        session = nextSession
         try {
             session?.advertise(advertisedProfile, result ?: NoopResult)
         } catch (error: Exception) {
@@ -268,13 +278,15 @@ class BleRelayForegroundService : Service() {
     private fun inspectIncomingEnvelope(event: Map<String, Any?>) {
         val bytes = event["message"] as? ByteArray ?: return
         val connectionId = event["connectionId"] as? String ?: return
+        if (connectionId != activeConnectionId || bytes.isEmpty() || bytes.size > 256) return
         try {
             val envelope = JSONObject(String(bytes, StandardCharsets.UTF_8))
             if (envelope.optInt("version") != 1 || envelope.optString("type") != "connection_request") return
             val requestId = envelope.optString("id").takeIf { it.isNotBlank() } ?: return
             if (acceptedRequestId != null || pendingRequestId != null) return
             val body = envelope.optJSONObject("body") ?: JSONObject()
-            val name = body.optString("name", "Someone nearby").ifBlank { "Someone nearby" }
+            val name = (body.opt("name") as? String)?.takeIf { it.isNotBlank() } ?: return
+            if (body.opt("role") != "offline_user") return
             activeConnectionId = connectionId
             pendingRequest = bytes.clone()
             pendingRequestId = requestId
@@ -287,19 +299,23 @@ class BleRelayForegroundService : Service() {
             }.also { handler.postDelayed(it, 60_000) }
             acceptedRequestId = null
             acceptedPeerName = null
-            if (notifiedRequestIds.add(requestId)) showRequestNotification(requestId, name)
+            if (notifiedRequestIds.add(requestId) && requestAlertGate.allow(android.os.SystemClock.elapsedRealtime())) {
+                showRequestNotification(requestId, name)
+            }
         } catch (error: Exception) {
             Log.w(TAG, "Ignoring malformed app envelope")
         }
     }
 
-    private fun handleOutgoingEnvelope(bytes: ByteArray) {
+    private fun handleOutgoingEnvelope(connectionId: String, bytes: ByteArray) {
+        if (connectionId != activeConnectionId) return
         try {
             val envelope = JSONObject(String(bytes, StandardCharsets.UTF_8))
             val type = envelope.optString("type")
             if (type != "connection_accept" && type != "connection_reject") return
-            clearRequestTimeout()
             val requestId = envelope.optJSONObject("body")?.optString("requestId")
+            if (requestId.isNullOrBlank() || requestId != pendingRequestId) return
+            clearRequestTimeout()
             val peerName = activePeerName()
             if (type == "connection_accept") {
                 availabilityEnabled = false

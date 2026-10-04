@@ -26,15 +26,19 @@ $source = Join-Path $appRoot 'android/app/src/main/kotlin/dev/offlinerelay/offli
 $test = Join-Path $PSScriptRoot 'BleDeadlinesTest.kt'
 $helperSource = Join-Path $appRoot 'android/app/src/main/kotlin/dev/offlinerelay/offline_relay/ble/HelperConversation.kt'
 $helperTest = Join-Path $PSScriptRoot 'HelperConversationTest.kt'
+$operationSource = Join-Path $appRoot 'android/app/src/main/kotlin/dev/offlinerelay/offline_relay/ble/BleOperationQueue.kt'
+$operationTest = Join-Path $PSScriptRoot 'BleOperationQueueTest.kt'
 New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
 $java = (Get-Command java -ErrorAction Stop).Source
 & $java -cp $compilerClasspath org.jetbrains.kotlin.cli.jvm.K2JVMCompiler `
-    -no-stdlib -no-reflect -classpath "$stdlib;$annotations" -d $OutputDirectory $source $test $helperSource $helperTest
+    -no-stdlib -no-reflect -classpath "$stdlib;$annotations" -d $OutputDirectory $source $test $helperSource $helperTest $operationSource $operationTest
 if ($LASTEXITCODE -ne 0) { throw "Kotlin compilation failed: $LASTEXITCODE" }
 & $java -cp "$OutputDirectory;$stdlib" dev.offlinerelay.offline_relay.ble.BleDeadlinesTestKt
 if ($LASTEXITCODE -ne 0) { throw "Deadline tests failed: $LASTEXITCODE" }
 & $java -cp "$OutputDirectory;$stdlib" dev.offlinerelay.offline_relay.ble.HelperConversationTestKt
 if ($LASTEXITCODE -ne 0) { throw "Helper conversation tests failed: $LASTEXITCODE" }
+& $java -cp "$OutputDirectory;$stdlib" dev.offlinerelay.offline_relay.ble.BleOperationQueueTestKt
+if ($LASTEXITCODE -ne 0) { throw "GATT operation policy tests failed: $LASTEXITCODE" }
 
 if ($AndroidJar -or $FlutterEmbeddingJar) {
     if (-not $AndroidJar -or -not $FlutterEmbeddingJar) {
@@ -46,7 +50,7 @@ if ($AndroidJar -or $FlutterEmbeddingJar) {
     & $java -cp $compilerClasspath org.jetbrains.kotlin.cli.jvm.K2JVMCompiler `
         -no-stdlib -no-reflect -jvm-target 17 `
         -classpath "$stdlib;$annotations;$AndroidJar;$FlutterEmbeddingJar" `
-        -d $sessionOutput $source $session
+        -d $sessionOutput $source $operationSource $session
     if ($LASTEXITCODE -ne 0) { throw "Android session compilation failed: $LASTEXITCODE" }
     Write-Output 'Android BLE session Kotlin compilation passed (not an APK build or device test).'
 
@@ -60,7 +64,7 @@ if ($AndroidJar -or $FlutterEmbeddingJar) {
     & $java -cp $compilerClasspath org.jetbrains.kotlin.cli.jvm.K2JVMCompiler `
         -no-stdlib -no-reflect -jvm-target 17 `
         -classpath "$stdlib;$annotations;$AndroidJar;$FlutterEmbeddingJar;$lifecycle" `
-        -d $sessionOutput $source $session $helperSource $activity $service $rSymbol
+        -d $sessionOutput $source $session $helperSource $operationSource $activity $service $rSymbol
     if ($LASTEXITCODE -ne 0) { throw "Android Activity/service source compilation failed: $LASTEXITCODE" }
     Write-Output 'Android Activity/service source compilation passed (R symbol placeholder; not an APK/device test).'
 }

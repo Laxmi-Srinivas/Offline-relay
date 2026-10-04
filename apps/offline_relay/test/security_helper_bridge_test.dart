@@ -59,6 +59,37 @@ void main() {
   }
 
   test(
+    'replacement native snapshot retires an ended detached request',
+    () async {
+      await request('A');
+      emit({'event': 'helperSnapshot', 'connectionId': 'B'});
+      await request('B');
+      expect(controller.incomingRequestId, 'request-B');
+      expect(controller.incomingPeerName, 'B');
+      expect(controller.messages, isEmpty);
+    },
+  );
+  test('accepted snapshot without a pending request closes the lost-key connection', () async {
+    emit({
+      'event': 'incomingConnection',
+      'connectionId': 'B',
+      'peer': {
+        'id': 'B',
+        'label': 'B',
+        'metadata': {'role': 'offline_user'},
+      },
+    });
+    emit({
+      'event': 'helperAccepted',
+      'connectionId': 'B',
+      'requestId': 'request-B',
+      'peerName': 'B',
+    });
+    await Future<void>.delayed(Duration.zero);
+    expect(controller.chatEndReason, RelayChatEndReason.connectionLost);
+    expect(controller.inChat, false);
+  });
+  test(
     'unknown native approval cannot close the replacement request',
     () async {
       await request('B');

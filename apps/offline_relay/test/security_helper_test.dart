@@ -62,6 +62,36 @@ void main() {
     );
   }
 
+  test(
+    'invalid request metadata cannot create or replace the approval prompt',
+    () async {
+      await controller.returnToNearby();
+      await controller.offerHelp();
+      final peer = TestConnection('metadata');
+      transport.incoming.add(peer);
+      await flush();
+      for (final body in <Map<String, Object?>>[
+        {'name': 123, 'role': 'offline_user'},
+        {'name': '', 'role': 'offline_user'},
+        {'name': 'Other role', 'role': 'internet_helper'},
+      ]) {
+        peer.emit(RelayMessageType.connectionRequest, body);
+      }
+      await flush();
+      expect(controller.hasIncomingRequest, false);
+      peer.emit(RelayMessageType.connectionRequest, {
+        'name': 'First',
+        'role': 'offline_user',
+      }, id: 'first');
+      peer.emit(RelayMessageType.connectionRequest, {
+        'name': 'Replacement',
+        'role': 'offline_user',
+      }, id: 'replacement');
+      await flush();
+      expect(controller.incomingRequestId, 'first');
+      expect(controller.incomingPeerName, 'First');
+    },
+  );
   test('old connection approval cannot approve replacement peer', () async {
     approve(TestConnection('A'), 'request-A');
     await flush();

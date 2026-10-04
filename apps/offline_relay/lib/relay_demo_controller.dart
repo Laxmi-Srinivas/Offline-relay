@@ -577,6 +577,7 @@ class RelayDemoController extends ChangeNotifier {
     _incomingConnection = connection;
     ++_sessionEpoch;
     messages.clear();
+    chatEndReason = null;
     _startRequestDeadline(connection);
     incomingPeerName = connection.peer.label;
     requestState = RelayRequestState.incoming;
@@ -604,8 +605,8 @@ class RelayDemoController extends ChangeNotifier {
     if (role != RelayUserRole.internetHelper ||
         _incomingConnection == null ||
         !identical(event.connection, _incomingConnection) ||
-        incomingRequestId == null ||
-        event.requestId != incomingRequestId) {
+        event.requestId == null ||
+        (incomingRequestId != null && event.requestId != incomingRequestId)) {
       return;
     }
     final pending = _incomingConnection;
@@ -626,6 +627,8 @@ class RelayDemoController extends ChangeNotifier {
 
   void _listenForMessages(RelayConnection connection) {
     final epoch = _sessionEpoch;
+    _sendQueue = Future<void>.value();
+    _secureSendQueue = Future<void>.value();
     _pendingReceiveMessages = 0;
     _receiveQueue = Future<void>.value();
     unawaited(_messageSubscription?.cancel());
@@ -690,9 +693,14 @@ class RelayDemoController extends ChangeNotifier {
           return;
         }
         if (incomingRequestId != null) return;
+        final name = _bodyString(envelope, 'name');
+        if (name == null ||
+            name.trim().isEmpty ||
+            envelope.body['role'] != 'offline_user') {
+          return;
+        }
         incomingRequestId = envelope.id;
-        incomingPeerName =
-            _bodyString(envelope, 'name') ?? connection.peer.label;
+        incomingPeerName = name;
         remoteRoleLabel = _roleLabel(_bodyString(envelope, 'role'));
         requestState = RelayRequestState.incoming;
         status = 'Connection request from $incomingPeerName.';
