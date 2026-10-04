@@ -107,9 +107,10 @@ profile characteristic, so it does not depend on the local name.
 This allows short BLE-event work while iOS schedules it, not a continuously running
 Flutter isolate or a foreground service. Timers may run late during suspension;
 15-second protocol deadlines do not grant 15 seconds of background CPU execution.
-There is no ongoing notification or new local-notification permission in this MVP.
-A background request is retained for the UI on resume; no Android-equivalent
-notification alert or automatic UI presentation is promised.
+There is no Android-style persistent foreground-service notification. Native local
+connection-request notifications are described below; notification delivery is
+subject to authorization and system settings. A background request is still
+retained for the UI on resume; no automatic request acceptance is performed.
 
 The peripheral restoration identifier asks CoreBluetooth to preserve eligible
 published services/advertising. On relaunch, compatible services without live
@@ -189,3 +190,72 @@ peer loss, Bluetooth off/on, missing ACK, and timer expiry. Exercise eligible sy
 restoration separately from manual reopening after force-quit; debugger termination
 is not equivalent to all OS termination cases. Capture device models, app revision,
 both device logs, and observed limits for those tests.
+
+## Native local connection-request notifications — validated checkpoint
+
+Physical local-notification validation **passed**, as reported by the tester on
+real iPhones using the release builds launched on the two devices listed above.
+This is a separate validation from the earlier foreground peer-chat and background
+helper-availability checkpoints. It is not simulator validation.
+
+- Uses native `UNUserNotificationCenter`, without a Flutter notification plugin,
+  APNs registration, push entitlement, background mode change, or signing change.
+- Enabling Help Others checks authorization and requests alert/sound permission
+  only when status is not determined. BLE startup does not wait for the result.
+  Denial/error leaves helper availability and pending-request replay intact.
+  Previously denied permission must be changed in iOS Settings; no repeated prompt.
+- The existing `BleHelperState.receive` request parser returns a descriptor only
+  for version-1 connection_request envelopes with nonempty ID, map body, exactly
+  the existing four envelope fields, and at most 256 bytes. Notifications do not
+  independently decode a protocol. Missing name uses the existing Nearby user
+  fallback. The wire format and message ACK behavior are unchanged.
+- Title: `Someone nearby needs help`. Body: `<peer name> sent you a connection request`.
+  Uses default sound, immediate local delivery, and identifier
+  `offlinerelay.request.<request ID>` to namespace alerts belonging to this feature.
+- Request IDs are deduplicated in a bounded, process-local cache of the most recent
+  256 IDs, including requests handled in foreground or without permission. Replays
+  do not reschedule alerts. A new request ID can notify after Reject/reconnect.
+- Scheduling requires helper enabled, authorized/provisional permission, and app
+  not active. Foreground banner/sound is suppressed; the existing incoming-request
+  UI remains the presentation. The AppDelegate also suppresses foreground delivery
+  if app state changes between scheduling and delivery.
+- Matching Accept/Reject clears pending and delivered alerts after the outgoing
+  response receives its application ACK. Disconnect/session end, helper disable,
+  or replacement of the helper session/request clears the relevant alert as well.
+  Generation tokens prevent late settings/add callbacks from leaving stale alerts.
+- Launch removes orphaned feature alerts because pending BLE requests do not survive
+  process death. Ordinary notification tap foregrounds the app and leaves the
+  existing request replay intact. There is no notification auto-accept/deep link.
+- FlutterAppDelegate remains the notification delegate; unrelated notifications
+  are forwarded to superclass callbacks. No custom notification actions are added.
+
+Foundation-only native tests cover request-ID deduplication, authorization and
+foreground scheduling decisions, Accept/Reject cleanup, disconnect/end/disable
+invalidation, new requests, stale callback tokens, and malformed envelopes.
+They do not test system alert delivery or substitute for real-device testing.
+See [Apple notification delegate documentation](https://developer.apple.com/documentation/usernotifications/unusernotificationcenterdelegate)
+and [notification center API](https://developer.apple.com/documentation/usernotifications/unusernotificationcenter).
+
+Physical results reported passing:
+
+- Helper enabled Help Others, then backgrounded the app / locked the phone.
+- Incoming connection request produced a native iOS local notification.
+- Notification appeared on the lock screen.
+- Tapping opened OfflineRelay with the pending connection request still available.
+- Accept cleared the request notification.
+- Reject cleared the request notification.
+- A later new request generated a new notification.
+- BLE helper mode continued working correctly.
+
+These are local notifications, not remote push notifications. iOS does not use an
+Android-style persistent foreground-service notification. Notification permission
+denial must not disable BLE helper availability; that separation passes the native
+policy tests, but denied-permission physical testing remains outstanding.
+
+Remaining physical notification checks: foreground suppression, Disable Help Others
+clearing stale alert state, and denied permission permitting BLE discovery/requests.
+Process-restoration and force-quit limitations remain unvalidated.
+
+Notification delivery depends on CoreBluetooth receiving the request and iOS
+notification settings (including Focus). This adds no force-quit/process-restoration
+availability guarantee and does not turn the app into a continuously running service.

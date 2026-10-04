@@ -22,19 +22,25 @@ struct BleHelperState {
     if connectionID != event["connectionId"] as? String { clearConnection() }
     connection = event
   }
-  mutating func receive(_ bytes: Data, retainChat: Bool) {
+  @discardableResult
+  mutating func receive(_ bytes: Data, retainChat: Bool) -> BleHelperRequest? {
     guard let envelope = try? JSONSerialization.jsonObject(with: bytes) as? [String: Any],
-      envelope["version"] as? Int == 1 else { return }
+      envelope["version"] as? Int == 1 else { return nil }
     if envelope["type"] as? String == "connection_request",
-      let id = envelope["id"] as? String, !id.isEmpty {
+      let id = envelope["id"] as? String, !id.isEmpty,
+      bytes.count <= 256, envelope.count == 4,
+      let version = envelope["version"] as? NSNumber, String(cString: version.objCType) != "c",
+      let body = envelope["body"] as? [String: Any] {
       request = bytes; requestID = id
-      peerName = (envelope["body"] as? [String: Any])?["name"] as? String ?? "Nearby user"
+      peerName = body["name"] as? String ?? "Nearby user"
       accepted = nil
+      return BleHelperRequest(id: id, peerName: peerName ?? "Nearby user")
     } else if retainChat, envelope["type"] as? String == "chat" {
       // Retain recent undelivered messages only; no unbounded background queue.
       if unreadMessages.count == 32 { unreadMessages.removeFirst() }
       unreadMessages.append(bytes)
     }
+    return nil
   }
   mutating func sent(_ bytes: Data) -> [String: Any]? {
     guard let envelope = try? JSONSerialization.jsonObject(with: bytes) as? [String: Any],
@@ -60,5 +66,31 @@ struct BleHelperState {
   }
   mutating func drainUnreadMessages() -> [Data] {
     let messages = unreadMessages; unreadMessages = []; return messages
+  }
+}
+
+struct BleHelperRequest {
+  let id: String
+  let peerName: String
+}
+
+/// Pure scheduling policy. Permission and foreground status never mutate BLE state.
+struct BleHelperNotificationState {
+  private(set) var active: BleHelperRequest?
+  private(set) var token = UUID()
+  private var seen: [String] = []
+
+  mutating func receive(_ request: BleHelperRequest, enabled: Bool) -> Bool {
+    guard enabled, !seen.contains(request.id) else { return false }
+    seen.append(request.id)
+    if seen.count > 256 { seen.removeFirst() }
+    active = request; token = UUID()
+    return true
+  }
+  func shouldSchedule(token: UUID, authorized: Bool, foreground: Bool) -> Bool {
+    active != nil && self.token == token && authorized && !foreground
+  }
+  mutating func clear() {
+    active = nil; token = UUID()
   }
 }

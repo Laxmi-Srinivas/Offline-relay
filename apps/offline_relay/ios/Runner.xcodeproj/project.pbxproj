@@ -23,6 +23,7 @@
 		B1E100000000000000000005 /* BleRelayChannels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1E000000000000000000005 /* BleRelayChannels.swift */; };
 		B1E100000000000000000006 /* BleHelperState.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1E000000000000000000006 /* BleHelperState.swift */; };
 		B1E100000000000000000007 /* BleHelperAvailability.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1E000000000000000000007 /* BleHelperAvailability.swift */; };
+		B1E100000000000000000008 /* BleHelperNotifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1E000000000000000000008 /* BleHelperNotifications.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -73,6 +74,7 @@
 		B1E000000000000000000005 /* BleRelayChannels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BleRelayChannels.swift; sourceTree = "<group>"; };
 		B1E000000000000000000006 /* BleHelperState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BleHelperState.swift; sourceTree = "<group>"; };
 		B1E000000000000000000007 /* BleHelperAvailability.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BleHelperAvailability.swift; sourceTree = "<group>"; };
+		B1E000000000000000000008 /* BleHelperNotifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BleHelperNotifications.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -137,6 +139,7 @@
 				1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */,
 				74858FAE1ED2DC5600515810 /* AppDelegate.swift */,
 				B1E000000000000000000007 /* BleHelperAvailability.swift */,
+				B1E000000000000000000008 /* BleHelperNotifications.swift */,
 				B1E000000000000000000006 /* BleHelperState.swift */,
 				B1E000000000000000000005 /* BleRelayChannels.swift */,
 				B1E000000000000000000004 /* BleRelaySession.swift */,
@@ -304,6 +307,7 @@
 			files = (
 				74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */,
 				B1E100000000000000000007 /* BleHelperAvailability.swift in Sources */,
+				B1E100000000000000000008 /* BleHelperNotifications.swift in Sources */,
 				B1E100000000000000000006 /* BleHelperState.swift in Sources */,
 				B1E100000000000000000005 /* BleRelayChannels.swift in Sources */,
 				B1E100000000000000000004 /* BleRelaySession.swift in Sources */,

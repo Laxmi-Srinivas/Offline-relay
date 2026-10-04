@@ -8,6 +8,7 @@ final class BleHelperAvailability {
   private static let profileKey = "offlinerelay.helper.profile"
   private let defaults: UserDefaults
   private var state = BleHelperState()
+  private let notifications = BleHelperNotifications()
   private var session: BleRelaySession?
   private var listener: (([String: Any]) -> Void)?
   private var generation = UUID()
@@ -17,6 +18,7 @@ final class BleHelperAvailability {
 
   /// Called during app launch, before the Flutter engine/channel is required.
   func restoreAvailability() {
+    notifications.clearOrphans()
     guard defaults.bool(forKey: Self.enabledKey), session == nil,
       let saved = defaults.dictionary(forKey: Self.profileKey),
       let profile = try? BleProfile.validate(saved) else { return }
@@ -55,6 +57,8 @@ final class BleHelperAvailability {
       guard state.connectionID == nil else {
         result(FlutterError(code: "ble_error", message: "Close the current helper connection first", details: nil)); return
       }
+      notifications.requestAuthorizationIfNeeded()
+      notifications.clear()
       // Invalidate any old restart before stopping/replacing its manager.
       generation = UUID(); stopping = true
       session?.stop("helper profile restart"); session = nil
@@ -87,6 +91,7 @@ final class BleHelperAvailability {
     }
   }
   func stopHelper(_ result: FlutterResult) {
+    notifications.clear()
     stopping = true; state.enabled = false
     defaults.set(false, forKey: Self.enabledKey)
     session?.stop("helper availability disabled"); session = nil
@@ -106,18 +111,29 @@ final class BleHelperAvailability {
       result(FlutterError(code: "connection_missing", message: "Helper BLE connection is unavailable", details: nil)); return
     }
     session.send(id, bytes: bytes) { [weak self] value in
-      if value == nil, let self = self, let event = self.state.sent(bytes) { self.listener?(event) }
+      if value == nil, let self = self, self.owns(id) {
+        let requestID = self.state.requestID
+        let event = self.state.sent(bytes)
+        if requestID != nil && self.state.requestID == nil { self.notifications.clear() }
+        if let event = event { self.listener?(event) }
+      }
       result(value)
     }
   }
   private func onEvent(_ event: [String: Any]) {
     switch event["event"] as? String {
-    case "incomingConnection": state.incoming(event)
+    case "incomingConnection":
+      if state.connectionID != event["connectionId"] as? String { notifications.clear() }
+      state.incoming(event)
     case "message":
       if let bytes = event["message"] as? FlutterStandardTypedData {
-        state.receive(bytes.data, retainChat: listener == nil)
+        if let request = state.receive(bytes.data, retainChat: listener == nil) {
+          notifications.received(request, enabled: state.enabled)
+        }
       }
+    case "disconnected": notifications.clear()
     case "sessionEnded":
+      notifications.clear()
       let shouldRestart = state.enabled && !stopping && state.connectionID != nil
       session = nil; state.clearConnection()
       if shouldRestart, let profile = state.profile {

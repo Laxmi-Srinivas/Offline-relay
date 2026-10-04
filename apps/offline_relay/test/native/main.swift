@@ -87,3 +87,45 @@ check(helperState.drainUnreadMessages().count == 32 && helperState.unreadMessage
 helperState.enabled = false; helperState.clearConnection()
 check(helperState.availabilityEvent["enabled"] as? Bool == false && helperState.accepted == nil, "disable resets replay")
 print("PASS: native helper availability/request/acceptance replay, reject/close retention, bounded detached messages, disable")
+
+// Notification decisions use the same request descriptor as native replay.
+var alerts = BleHelperNotificationState()
+helperState.enabled = true
+helperState.incoming(["connectionId": "notification-link"])
+let validRequest = helperState.receive(request, retainChat: false)!
+check(!alerts.receive(validRequest, enabled: false), "disabled helper never notifies")
+check(alerts.receive(validRequest, enabled: true), "new request notification")
+let alertToken = alerts.token
+check(!alerts.receive(validRequest, enabled: true) && alerts.token == alertToken, "request ID deduplicated")
+check(alerts.shouldSchedule(token: alertToken, authorized: true, foreground: false), "authorized background schedules")
+check(!alerts.shouldSchedule(token: alertToken, authorized: true, foreground: true), "foreground suppresses duplicate UI")
+check(!alerts.shouldSchedule(token: alertToken, authorized: false, foreground: false) && helperState.enabled, "permission denial does not disable BLE")
+for resolution in [accept, reject] {
+  helperState.receive(request, retainChat: false)
+  let previous = helperState.requestID
+  _ = helperState.sent(resolution)
+  if previous != nil && helperState.requestID == nil { alerts.clear() }
+  check(alerts.active == nil && !alerts.shouldSchedule(token: alertToken, authorized: true, foreground: false), "accept/reject cancels async notification")
+}
+for reason in ["disconnect", "session end", "disable"] {
+  let next = BleHelperRequest(id: reason, peerName: "Next peer")
+  check(alerts.receive(next, enabled: true), "another request can notify")
+  let pending = alerts.token
+  alerts.clear()
+  check(alerts.active == nil && !alerts.shouldSchedule(token: pending, authorized: true, foreground: false), "cleanup invalidates \(reason)")
+}
+for invalid in [Data("bad JSON".utf8), Data("{\"version\":true,\"id\":\"x\",\"type\":\"connection_request\",\"body\":{}}".utf8)] {
+  check(helperState.receive(invalid, retainChat: false) == nil, "malformed request cannot notify")
+}
+for object: [String: Any] in [
+  ["version": 2, "id": "x", "type": "connection_request", "body": [:]],
+  ["version": 1, "id": "", "type": "connection_request", "body": [:]],
+  ["version": 1, "id": "x", "type": "connection_request", "body": "bad"],
+  ["version": 1, "id": "x", "type": "connection_request", "body": [:], "extra": true],
+  ["version": 1, "id": "x", "type": "chat", "body": [:]],
+  ["version": 1, "id": "x", "type": "connection_request", "body": ["name": String(repeating: "x", count: 256)]]
+] {
+  let invalidBytes = try JSONSerialization.data(withJSONObject: object)
+  check(helperState.receive(invalidBytes, retainChat: false) == nil, "invalid/non-request envelope cannot notify")
+}
+print("PASS: notification deduplication, authorization/foreground policy, resolution/cleanup, stale callbacks, malformed requests")
