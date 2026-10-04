@@ -116,7 +116,7 @@ class BleRelayForegroundService : Service() {
     fun advertise(profile: Map<String, Any?>, result: MethodChannel.Result) {
         val notifications = getSystemService(NotificationManager::class.java)
         if (!notifications.areNotificationsEnabled() || notifications.getNotificationChannel(REQUEST_CHANNEL)?.importance == NotificationManager.IMPORTANCE_NONE) {
-            result.error("notification_permission_denied", "Enable OfflineRelay notifications and the Nearby help requests notification channel in Android Settings.", null)
+            result.error("notification_permission_denied", "Enable onya notifications and the Nearby help requests notification channel in Android Settings.", null)
             stopAvailability()
             return
         }
@@ -248,7 +248,7 @@ class BleRelayForegroundService : Service() {
                 if (!shouldResume && !stopping) {
                     availabilityEnabled = false
                     notifyState()
-                    updateOngoingNotification("Help Others stopped. Open OfflineRelay to retry.")
+                    updateOngoingNotification("Help Others stopped. Open onya to retry.")
                     stopForeground(STOP_FOREGROUND_REMOVE)
                     stopSelf()
                 }
@@ -362,7 +362,7 @@ class BleRelayForegroundService : Service() {
         val manager = getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(
             NotificationChannel(ONGOING_CHANNEL, "Helper availability", NotificationManager.IMPORTANCE_LOW)
-                .apply { description = "Shows when OfflineRelay is available to nearby users." },
+                .apply { description = "Shows when onya is available to nearby users." },
         )
         manager.createNotificationChannel(
             NotificationChannel(REQUEST_CHANNEL, "Nearby help requests", NotificationManager.IMPORTANCE_HIGH)
@@ -373,7 +373,7 @@ class BleRelayForegroundService : Service() {
     private fun ongoingNotification(text: String = "Available to nearby users"): Notification =
         Notification.Builder(this, ONGOING_CHANNEL)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("OfflineRelay · Help Others")
+            .setContentTitle("onya · Help Others")
             .setContentText(text)
             .setCategory(Notification.CATEGORY_SERVICE)
             .setOngoing(true)

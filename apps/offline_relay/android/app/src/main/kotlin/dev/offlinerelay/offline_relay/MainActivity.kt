@@ -154,7 +154,7 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun unbindHelperService() {
-        pendingHelperResult?.error("activity_stopped", "Return to OfflineRelay and enable Help Others again.", null)
+        pendingHelperResult?.error("activity_stopped", "Return to onya and enable Help Others again.", null)
         pendingHelperResult = null
         pendingHelperAction = null
         if (!helperBound) return
@@ -294,7 +294,7 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
-        pendingPermissionResult?.error("activity_destroyed", "Return to OfflineRelay and try again.", null)
+        pendingPermissionResult?.error("activity_destroyed", "Return to onya and try again.", null)
         pendingPermissionResult = null
         pendingPermissionAction = null
         unbindHelperService()

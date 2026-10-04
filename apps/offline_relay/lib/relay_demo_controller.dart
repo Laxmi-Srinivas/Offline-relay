@@ -239,7 +239,7 @@ class RelayDemoController extends ChangeNotifier {
     peers.clear();
     await _transport.advertise(localProfile);
     isOffering = true;
-    status = 'Help Others is on. You can leave OfflineRelay running.';
+    status = 'Help Others is on. You can leave onya running.';
     notifyListeners();
   }
 
@@ -559,7 +559,7 @@ class RelayDemoController extends ChangeNotifier {
     isOffering = state.enabled;
     if (!inChat && !hasIncomingRequest) {
       status = state.enabled
-          ? 'Help Others is on. You can leave OfflineRelay running.'
+          ? 'Help Others is on. You can leave onya running.'
           : 'Help Others is off.';
     }
     notifyListeners();
@@ -1006,8 +1006,8 @@ class RelayDemoController extends ChangeNotifier {
     final value = error.toString().replaceFirst('Bad state: ', '');
     if (value.toLowerCase().contains('permission')) {
       return value.toLowerCase().contains('notification')
-          ? 'Allow notifications in Android Settings > Apps > OfflineRelay > Notifications, then enable Help Others again.'
-          : 'Nearby permissions are needed. Allow Nearby devices in Android Settings > Apps > OfflineRelay > Permissions, then try again.';
+          ? 'Allow notifications in Android Settings > Apps > onya > Notifications, then enable Help Others again.'
+          : 'Nearby permissions are needed. Allow Nearby devices in Android Settings > Apps > onya > Permissions, then try again.';
     }
     if (value.toLowerCase().contains('bluetooth')) {
       return 'Turn on Bluetooth to find and connect with nearby helpers.';

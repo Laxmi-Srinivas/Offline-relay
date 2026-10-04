@@ -145,7 +145,7 @@ class _OfflineRelayAppState extends State<OfflineRelayApp> {
 
   @override
   Widget build(BuildContext context) => MaterialApp(
-    title: 'OfflineRelay',
+    title: 'onya',
     debugShowCheckedModeBanner: false,
     scaffoldMessengerKey: _messengerKey,
     theme: buildOfflineRelayTheme(),

@@ -73,7 +73,7 @@ void main() {
     await tester.pumpWidget(const OfflineRelayApp());
     await tester.pump();
 
-    expect(find.text('OfflineRelay'), findsOneWidget);
+    expect(find.text('onya'), findsOneWidget);
     expect(find.text('No internet?\nGet help nearby.'), findsOneWidget);
     expect(find.text('Find People Nearby'), findsOneWidget);
     expect(find.text('Home'), findsOneWidget);

@@ -7,6 +7,6 @@ monochrome layer. Legacy PNGs are provided at 48/72/96/144/192 pixels.
 
 The horizontal PNG is an 840 x 330 transparent rasterization of the supplied
 horizontal SVG, rendered with Windows WPF. Flutter displays it in the existing
-Home header logo position without an SVG dependency. The adjacent OfflineRelay
-title and Android application label retain the product name; the supplied artwork
-does not rename the application. No application ID or functionality was changed.
+Home header logo position without an SVG dependency. The adjacent title and
+Android application label now use the user-confirmed product name, onya.
+No application ID or functionality was changed.

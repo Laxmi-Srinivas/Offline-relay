@@ -163,7 +163,7 @@ class BleRelaySession(
         role = Role.PERIPHERAL
         peerInfo = mapOf(
             "id" to (profile["id"] as? String ?: UUID.randomUUID().toString()),
-            "label" to (profile["label"] as? String ?: "OfflineRelay user"),
+            "label" to (profile["label"] as? String ?: "onya user"),
             "metadata" to (profile["metadata"] as? Map<*, *> ?: emptyMap<String, String>()),
         )
         pendingAdvertise = result
@@ -310,9 +310,9 @@ class BleRelaySession(
             }
             val profile = decodeProfile(result.scanRecord?.getServiceData(ParcelUuid(SERVICE)))
             val label = profile?.first ?: try {
-                result.device.name?.takeIf { it.isNotBlank() } ?: "Nearby OfflineRelay user"
+                result.device.name?.takeIf { it.isNotBlank() } ?: "Nearby onya user"
             } catch (_: SecurityException) {
-                "Nearby OfflineRelay user"
+                "Nearby onya user"
             }
             val peer = mapOf("id" to id, "label" to label,
                 "metadata" to (profile?.second ?: emptyMap<String, String>()))
@@ -484,9 +484,9 @@ class BleRelaySession(
                     if (remote == device && connectionId != null) return@event
                     connectionId = UUID.randomUUID().toString()
                     val label = try {
-                        device.name?.takeIf { it.isNotBlank() } ?: "Nearby OfflineRelay user"
+                        device.name?.takeIf { it.isNotBlank() } ?: "Nearby onya user"
                     } catch (_: SecurityException) {
-                        "Nearby OfflineRelay user"
+                        "Nearby onya user"
                     }
                     peerInfo = mapOf("id" to UUID.randomUUID().toString(), "label" to label,
                         "metadata" to emptyMap<String, String>())
@@ -610,7 +610,7 @@ class BleRelaySession(
             "internet_helper" -> 2
             else -> 0
         }
-        var labelText = profile["label"] as? String ?: "OfflineRelay"
+        var labelText = profile["label"] as? String ?: "onya"
         while (labelText.toByteArray(StandardCharsets.UTF_8).size > 10) {
             labelText = labelText.dropLast(1)
         }
