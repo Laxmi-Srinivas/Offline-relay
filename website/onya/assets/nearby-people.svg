@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="620" height="520" viewBox="0 0 620 520">
+  <defs><pattern id="dots" width="18" height="18" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r=".8" fill="#B5C6AE" opacity=".6"/></pattern></defs>
+  <path d="M63 362C-5 260 62 155 153 124c104-36 179-80 279-35 104 46 132 133 102 247-26 101-131 131-263 127C155 460 95 413 63 362Z" fill="#DDE5D5"/>
+  <path d="M65 175h488v252H65z" fill="url(#dots)"/>
+  <path d="M76 431h467" stroke="#8EAC92" stroke-width="2" stroke-linecap="round"/>
+  <ellipse cx="170" cy="435" rx="91" ry="9" fill="#C2D2BD"/><ellipse cx="436" cy="435" rx="68" ry="9" fill="#C2D2BD"/>
+  <!-- Student's chair, legs and shoes. -->
+  <path d="M112 295h80v68h-80z" fill="#ABC3A9"/><path d="M116 361 107 429m80-68 8 68" stroke="#5C7964" stroke-width="6" stroke-linecap="round"/>
+  <path d="M145 329c9 14 38 19 62 22l14 67h-27l-26-49-37-14Z" fill="#172B28"/><path d="M139 341 116 407h-22l18-83Z" fill="#2C443C"/>
+  <path d="M192 414h28l17 12c4 3 3 7-3 7h-43zM95 403h21l-4 27H77c-5 0-6-4-2-7Z" fill="#F7F5EF" stroke="#172B28" stroke-width="2" stroke-linejoin="round"/>
+  <!-- Student's shirt and head. -->
+  <path d="M121 222c-17 11-23 37-24 84-1 19 15 31 40 30l50-3-8-74c-6-23-30-46-58-37Z" fill="#246B57"/>
+  <path d="m129 213-1 24c11 12 28 11 34 2l-10-26" fill="#EDC0A5"/>
+  <path d="M125 170c4-24 44-25 51-2l-1 26c-3 24-15 34-31 25-16-9-25-33-19-49Z" fill="#EDC0A5"/>
+  <path d="M121 178c-10-8-8-33 11-39 15-5 25-1 39 9 10 7 13 19 8 34l-9-11-1-11c-17 4-28-3-32-6-2 14-9 20-16 24Z" fill="#172B28"/>
+  <path d="M139 184h10m12 0h9m-21 0h12" stroke="#172B28" stroke-width="2" stroke-linecap="round"/><path d="m154 184 1 10" stroke="#A97553" stroke-width="2"/><path d="M149 204c5 3 9 2 12-1" stroke="#172B28" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+  <!-- Student's arms, desk and laptop. -->
+  <path d="M116 248c-5 19 6 39 29 47l38 8 7-17-37-17-9-23" fill="#347D63"/>
+  <path d="m181 287 21 2 20 14-5 8-32-6Z" fill="#EDC0A5"/>
+  <path d="M179 251c9 3 15 11 18 25l14 8-8 15-25-14-7-21" fill="#246B57"/>
+  <path d="m203 283 19 2 9 15-15 3-15-5Z" fill="#EDC0A5"/>
+  <path d="M171 314h126m-112 0-8 119m108-119 11 119" stroke="#8A6B51" stroke-width="6" stroke-linecap="round"/>
+  <path d="M217 258h63l-10 50h-63z" fill="#F7F5EF" stroke="#172B28" stroke-width="2" stroke-linejoin="round"/><path d="M199 310h76" stroke="#172B28" stroke-width="3" stroke-linecap="round"/><circle cx="243" cy="281" r="5" fill="#A9C7B5"/>
+  <!-- Nearby helper's legs, shoes and shirt. -->
+  <path d="M410 310h48l13 103h-25l-17-65-6 66h-24Z" fill="#2D473D"/>
+  <path d="M399 408h25l2 22h-43c-6 0-6-5-1-8Zm46 0h25l22 15c4 3 2 7-3 7h-44Z" fill="#F7F5EF" stroke="#172B28" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M413 205c23-9 40 2 51 22 10 18 12 55 4 91h-66c-1-32-1-67 11-113Z" fill="#EDC0A5"/>
+  <path d="M413 207c11 8 20 12 39 1l8 11-25 14-24-14Z" fill="#F7F5EF"/>
+  <path d="m425 186-2 24c8 9 20 9 27 0l-5-24" fill="#C58F6B"/>
+  <!-- Helper's face and hair. -->
+  <path d="M414 147c7-25 39-28 51-4 8 17 2 46-13 56-21 15-37-11-38-31Z" fill="#C58F6B"/>
+  <path d="M415 175c-22-16-18-50 4-61 22-11 50 1 55 18 4 13 1 23-5 34l-9-21c-17 9-32 4-37-3-3 12-1 26-8 33Z" fill="#172B28"/>
+  <circle cx="425" cy="168" r="2" fill="#172B28"/><circle cx="450" cy="167" r="2" fill="#172B28"/><path d="m438 169-2 10m-4 7c5 3 10 2 14-2" stroke="#172B28" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+  <!-- Helper holds phone. -->
+  <path d="M454 235c-3 10-12 16-28 22l-22-4-4 17 29 8c26-5 38-20 42-36" fill="#DDAF8F"/>
+  <path d="M412 230c-11 12-20 16-21 35l12 15 15-12-4-16" fill="#EDC0A5"/>
+  <rect x="377" y="231" width="26" height="45" rx="5" transform="rotate(-12 377 231)" fill="#172B28"/><rect x="380" y="236" width="20" height="32" rx="2" transform="rotate(-12 380 236)" fill="#A9C7B5"/><path d="m403 256-12 2-4 13 16 6 11-9" fill="#C58F6B"/>
+  <!-- A quiet dotted connection between devices. -->
+  <path d="M263 248c25-72 99-95 137-38" fill="none" stroke="#246B57" stroke-width="2" stroke-dasharray="3 8" stroke-linecap="round"/>
+  <circle cx="325" cy="192" r="22" fill="#F7F5EF" stroke="#8EAC92"/><path d="m320 179 12 11-12 9v-20l12 11-17 12m5-3 12 10-12-11" fill="none" stroke="#246B57" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Voluntary availability annotation and small campus details. -->
+  <rect x="405" y="66" width="124" height="30" rx="15" fill="#F7F5EF" stroke="#B5C6AE"/><circle cx="419" cy="81" r="3" fill="#246B57"/><text x="430" y="85" font-family="Arial,sans-serif" font-size="10" fill="#246B57">Open to helping</text>
+  <path d="M514 431v-52m0 15c-18-5-24-17-21-31 17 2 24 13 21 31Zm1 15c20-1 30-12 30-26-17-1-28 9-30 26Z" fill="#A9C7B5" stroke="#5C7964" stroke-width="2" stroke-linejoin="round"/><path d="M501 417h28l-3 20h-22Z" fill="#EDC0A5" stroke="#8A6B51" stroke-width="1.5"/>
+  <path d="m69 151 9-6m-3 26 11-2m452 120 10 3" stroke="#8EAC92" stroke-width="2" stroke-linecap="round"/>
+</svg>
