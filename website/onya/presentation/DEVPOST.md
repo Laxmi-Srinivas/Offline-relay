@@ -128,3 +128,8 @@ Background delivery and rejection produced GATT errors; say so if asked.
 Chat encryption is implemented, but key exchange does not authenticate identity.
 iOS is team-reported and separate; use a real recording only when supplied.
 The supplied Onya symbol is used unchanged. The Onya Android 0.0.1 debug test APK is published as a prerelease asset at https://github.com/Laxmi-Srinivas/Offline-relay/releases/tag/onya-android-security-v0.0.1-test.1. It is not production-ready.
+
+
+## Planned work that missed submission
+
+We planned to complete iOS-to-iOS integration, but the merge failed. Debugging it consumed the time reserved for finishing and verifying that integration before submission. It remains unfinished and is not presented as a working capability; the demonstrated and downloadable build is the Android Security test build.

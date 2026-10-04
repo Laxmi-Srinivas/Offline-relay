@@ -74,9 +74,12 @@ assert 'releases/download/onya-android-security-v0.0.1-test.1/Onya-Android-Secur
 page = (root / 'index.html').read_text(encoding='utf-8')
 assert 'Download the Onya Android security test APK.' in page
 assert 'id=\"android-download\" href=\"https://github.com/Laxmi-Srinivas/Offline-relay/releases/download/onya-android-security-v0.0.1-test.1/Onya-Android-Security-Test-0.0.1.apk\"' in page
-for public_file in ['index.html', 'evidence.html', 'app.js', 'release-config.js']:
+for public_file in ['evidence.html', 'app.js', 'release-config.js']:
     assert not re.search(r'iOS|iPhone|iPad|ios|iphone', (root / public_file).read_text(encoding='utf-8'), re.I), public_file
-print('PASS: Android-only public copy and pinned APK release configuration')
+assert 'Planned, not delivered before submission:' in page
+assert 'The merge failed' in page and 'not completed or verified' in page
+assert not re.search(r'iOS public download|iPhone / iOS|Watch iPhone|id=\"ios-access\"', page, re.I)
+print('PASS: Android delivery plus clearly unfinished integration note and pinned APK configuration')
 
 with tempfile.TemporaryDirectory(prefix='onya-package-check-') as directory:
     archive_path = Path(directory) / 'onya.zip'
