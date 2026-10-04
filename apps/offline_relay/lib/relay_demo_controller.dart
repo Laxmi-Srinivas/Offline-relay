@@ -19,6 +19,9 @@ class RelayConversationMessage {
 
 /// Minimal in-memory app flow layered over the platform transport contract.
 class RelayDemoController extends ChangeNotifier {
+  static const maxHistoryMessages = 300;
+  static const _maxRecentIncomingIds = 1024;
+
   RelayDemoController(this._transport) {
     _incomingSubscription = _transport.incomingConnections.listen(
       _onIncomingConnection,
@@ -29,6 +32,7 @@ class RelayDemoController extends ChangeNotifier {
   final RelayTransport _transport;
   final peers = <RelayPeer>[];
   final messages = <RelayConversationMessage>[];
+  final _recentIncomingIds = <String>{};
 
   String displayName = '';
   RelayUserRole role = RelayUserRole.offlineUser;
@@ -221,7 +225,7 @@ class RelayDemoController extends ChangeNotifier {
     );
     await _sendEnvelope(envelope);
     if (!_isCurrent(connection) || epoch != _sessionEpoch || !inChat) return;
-    messages.add(
+    _appendMessage(
       RelayConversationMessage(
         id: envelope.id,
         text: value,
@@ -331,7 +335,11 @@ class RelayDemoController extends ChangeNotifier {
         if (!inChat || !identical(_connection, connection)) return;
         final text = _bodyString(envelope, 'text');
         if (text == null) return;
-        messages.add(
+        if (!_recentIncomingIds.add(envelope.id)) return;
+        if (_recentIncomingIds.length > _maxRecentIncomingIds) {
+          _recentIncomingIds.remove(_recentIncomingIds.first);
+        }
+        _appendMessage(
           RelayConversationMessage(
             id: envelope.id,
             text: text,
@@ -343,6 +351,13 @@ class RelayDemoController extends ChangeNotifier {
       case RelayMessageType.serviceResponse:
       // Reserved by the shared transport contract; this MVP treats them as
       // unsupported messages and keeps the chat flow text-only.
+    }
+  }
+
+  void _appendMessage(RelayConversationMessage message) {
+    messages.add(message);
+    if (messages.length > maxHistoryMessages) {
+      messages.removeRange(0, messages.length - maxHistoryMessages);
     }
   }
 
@@ -372,6 +387,7 @@ class RelayDemoController extends ChangeNotifier {
     _clearIncomingRequest();
     remoteName = null;
     messages.clear();
+    _recentIncomingIds.clear();
     inChat = false;
     isConnecting = false;
     isWaitingForAcceptance = false;

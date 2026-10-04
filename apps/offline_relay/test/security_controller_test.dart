@@ -143,6 +143,78 @@ void main() {
     expect(connection.closed, isFalse);
   });
 
+  test(
+    'repeated chat ID cannot add or replace the displayed message',
+    () async {
+      final connection = await outgoing();
+      connection.emit(RelayMessageType.chat, {'text': 'first'}, id: 'same');
+      connection.emit(RelayMessageType.chat, {'text': 'changed'}, id: 'same');
+      await flush();
+      expect(controller.messages, hasLength(1));
+      expect(controller.messages.single.text, 'first');
+    },
+  );
+
+  test('incoming history retains only the newest 300 messages', () async {
+    final connection = await outgoing();
+    for (var i = 0; i < 320; i++) {
+      connection.emit(RelayMessageType.chat, {'text': 'message $i'}, id: '$i');
+    }
+    await flush();
+    expect(controller.messages, hasLength(300));
+    expect(controller.messages.first.text, 'message 20');
+    expect(controller.messages.last.text, 'message 319');
+  });
+
+  test('local sends use the same 300-message history limit', () async {
+    await outgoing();
+    for (var i = 0; i < 305; i++) {
+      await controller.sendChat('local $i');
+    }
+    expect(controller.messages, hasLength(300));
+    expect(controller.messages.first.text, 'local 5');
+    expect(controller.messages.last.text, 'local 304');
+  });
+
+  test(
+    'duplicate tracking resets for a different accepted conversation',
+    () async {
+      final old = await outgoing();
+      old.emit(RelayMessageType.chat, {'text': 'old'}, id: 'same');
+      await flush();
+      await controller.returnToNearby();
+      transport.nextConnection = TestConnection('new');
+      final next = await outgoing();
+      next.emit(RelayMessageType.chat, {'text': 'new'}, id: 'same');
+      await flush();
+      expect(controller.messages.single.text, 'new');
+    },
+  );
+
+  test(
+    'duplicate suppression is a bounded recent window, not permanent history',
+    () async {
+      final connection = await outgoing();
+      for (var i = 0; i < 1025; i++) {
+        connection.emit(RelayMessageType.chat, {
+          'text': 'message $i',
+        }, id: '$i');
+      }
+      await flush();
+      connection.emit(RelayMessageType.chat, {
+        'text': 'recent replay',
+      }, id: '1024');
+      await flush();
+      expect(controller.messages.last.text, 'message 1024');
+      connection.emit(RelayMessageType.chat, {
+        'text': 'outside window',
+      }, id: '0');
+      await flush();
+      expect(controller.messages.last.text, 'outside window');
+      expect(controller.messages, hasLength(300));
+    },
+  );
+
   test('repeated requests cannot change the peer awaiting approval', () async {
     final connection = await incoming();
     connection.emit(RelayMessageType.connectionRequest, {

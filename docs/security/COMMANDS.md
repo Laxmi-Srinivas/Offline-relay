@@ -57,3 +57,18 @@ Further results will be appended after execution, not predicted.
   Android API 35 and the matching embedding. This uses Kotlin 2.1.20, not the full
   declared Gradle/AGP pipeline; it establishes source compilation only.
 - The first verified commit is `3ec8369` (consent and conversation lifecycle).
+
+### Bounded conversation memory and duplicate display
+
+- Deadline/setup work committed as `2b30aac` on Security only.
+- Added 5 memory/duplicate tests before implementing the policy. Four failed on
+  the unchanged behavior (duplicates, incoming/local bounds and recent-window
+  suppression); the conversation-reset test already passed.
+- Selected newest 300 messages and newest 1024 incoming IDs per conversation after
+  the user requested advice. Added a visible history-limit notice; no persistent
+  storage and no web presentation implementation were added.
+- An analysis lint preferred a set literal instead of an explicit LinkedHashSet
+  constructor; changed to Dart's insertion-ordered set literal.
+- `flutter analyze` passed with no issues; all 26 Flutter tests passed, including
+  17 security regressions. Previous 6 native timer tests/source compilation remain
+  applicable because native source did not change in this step.

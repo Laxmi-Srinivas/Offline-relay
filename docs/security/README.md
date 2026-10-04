@@ -43,7 +43,7 @@ Native path: `apps/offline_relay/android/app/src/main/kotlin/dev/offlinerelay/of
 | S2 | Shared timer replaced/cleared by receive. Native 96-105, 190-212, 446-471, 573-605. | Connected peer sends inbound traffic while withholding send ACK; outstanding send may never time out. Existing cap and nominal 15-second deadline do not isolate operations. | Medium / high source confidence | Fixed with independent setup/send/receive deadlines; 6 production-helper tests pass; device verification pending |
 | S3 | Idle peer occupies one slot; no request setup expiry. Native 399-440; controller 220-231. | Nearby peer connects without subscribing or requesting. Blocks other peers. Foreground teardown and one-peer restriction exist. | Medium / high source confidence | Subscription and request setup each expire after 15 seconds; controller/helper tests and native source compilation pass; full APK/device verification pending. Valid requests keep existing human accept/reject behavior. |
 | S4 | Disconnect retains controller history/references. Controller 107-116, 197-218, 234-251. | Peer disconnect/error followed by another chat; old history can appear under new peer or reconnect is blocked. Explicit back action and native cleanup exist. History is not transmitted automatically. | Medium / high source confidence | Fixed: common cleanup and stale async completion guards; automated disconnect/reconnect regressions passed; device check pending |
-| S5 | Unbounded history; repeated envelope IDs appended. Controller 30-31, 179-195, 287-297. | Connected peer repeats valid messages; duplicate display and increasing memory. 256-byte per-message cap exists. Practical exhaustion rate unknown. | Low-Medium / high for growth, medium for exhaustion | History policy requires agreement; device stress testing pending |
+| S5 | Unbounded history; repeated envelope IDs appended. Controller 30-31, 179-195, 287-297. | Connected peer repeats valid messages; duplicate display and increasing memory. 256-byte per-message cap exists. Practical exhaustion rate unknown. | Low-Medium / high for growth, medium for exhaustion | History now retains newest 300 messages; duplicate suppression uses newest 1024 incoming IDs per conversation. Automated boundary tests pass; radio flooding remains unverified. |
 | S6 | No required encrypted/authenticated link or application key exchange. Native 121-138, 176-187, 190-212, 551-570; envelope encode in packages/relay_transport/lib/relay_transport.dart 126-142. | Radio attacker would need an unprotected link and suitable capability; interception not demonstrated. User selection and IDs/ACK checks are not cryptographic authentication. | Medium / high for missing policy, actual link state unknown | Device security inspection and pairing UX agreement required; no crypto implemented |
 
 The controller on the reviewed iOS branch is identical and shares S1/S4/S5;
@@ -56,6 +56,14 @@ Deadline helper `BleDeadlines` uses independent cancellation tokens for SETUP,
 SEND and RECEIVE. Stale callbacks cannot expire replacement timers. Native stop
 clears all deadlines. Incoming application setup expires only until the first
 valid request; the helper is not forced to decide within a new time limit.
+
+The history policy was selected after the user asked for a recommendation: newest
+300 messages, in memory only. The chat UI explains the limit when reached. Old
+messages are discarded, not saved elsewhere. Recent incoming ID tracking is capped
+at 1024 and resets with the conversation. A changed payload with a recently seen ID
+is ignored. IDs outside that window or replayed in a later conversation can be
+accepted: this is bounded duplicate suppression, not cryptographic replay defense.
+No unbounded seen-ID set, persistence or new dependency was added.
 
 See [command record](COMMANDS.md) for executed commands and results and
 [verification](VERIFICATION.md) for automated and physical checks.

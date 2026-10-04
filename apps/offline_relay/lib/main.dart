@@ -220,6 +220,11 @@ class _OfflineRelayAppState extends State<OfflineRelayApp> {
     final c = _controller;
     return Column(
       children: [
+        if (c.messages.length >= RelayDemoController.maxHistoryMessages)
+          const Padding(
+            padding: EdgeInsets.all(8),
+            child: Text('Showing the newest 300 messages in this conversation.'),
+          ),
         Expanded(
           child: c.messages.isEmpty
               ? const Center(child: Text('Connected. Start a conversation.'))

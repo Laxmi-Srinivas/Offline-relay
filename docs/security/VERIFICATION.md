@@ -14,6 +14,12 @@ installed by the local SDK tooling. Native BLE session source compilation passed
 separately against Android API 35 and the matching Flutter embedding, using
 Kotlin 2.1.20. This does not establish the full Gradle build or device behavior.
 
+After memory/duplicate changes: analysis passed and all 26 Flutter tests passed
+(9 existing + 17 security regressions). Four newly added tests failed before the
+memory fix; the fifth verifies existing conversation reset. Tests cover newest-300
+incoming/local history, suppression of changed payloads with the same recent ID,
+reset for a different conversation, and the explicit 1024-ID-window limitation.
+
 Using matching Flutter 3.47.6 / Dart 3.13.5, from `apps/offline_relay`:
 
 ```text
