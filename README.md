@@ -1,34 +1,20 @@
 # OfflineRelay engineering foundation
 
-This repository contains a minimal Flutter host, a pure Dart transport boundary,
-design documentation, and a disposable Android BLE experiment. It is not the
-OfflineRelay product. No accounts, backend, service requests, chat UI, or LAN
-implementation are included.
+This repository is organized into distinct implementation tracks. The default `main` branch is the Flutter and transport-engineering foundation. The `feat/native-android-continuity` branch adds a separate Kotlin/Compose Android help-and-chat prototype for evaluation; it does not replace the Flutter host or the BLE experiment.
 
-## Layout
+## Implementation tracks
 
-- `apps/offline_relay/`: placeholder host with Android, iOS, Linux, macOS, and
-  Windows scaffolds. These are intended targets, not verified runnable builds.
-- `packages/relay_transport/`: transport-independent discovery/connection/message
-  interfaces; no production adapters.
-- `experiments/ble_poc/`: separate Android 12+ central/peripheral experiment.
-  The product host has no dependency on it.
-- `docs/`: [scope](docs/product/v1-spec.md),
-  [architecture](docs/architecture/overview.md),
-  [transport constraints](docs/architecture/transports.md),
-  [ADR](docs/decisions/ADR-001-transport-architecture.md),
-  [protocol](docs/protocols/message-protocol.md), and
-  [device evidence](docs/testing/device-matrix.md).
+- [`apps/offline_relay/`](apps/offline_relay/): Flutter/Dart host scaffold with generated Android, iOS, Linux, macOS, and Windows platform folders. These are intended targets, not all verified runnable builds.
+- [`apps/offline_relay_android/`](apps/offline_relay_android/): standalone native Android project using Kotlin, Jetpack Compose, and Google Nearby Connections. Open this folder itself in Android Studio. This branch has a working two-role help-request/chat flow in code; local build and JVM tests pass, but the full physical two-phone flow needs fresh verification.
+- [`experiments/ble_poc/`](experiments/ble_poc/): disposable BLE central/peripheral experiment, separate from both app implementations.
+- [`packages/relay_transport/`](packages/relay_transport/): transport-independent Dart interfaces. The Kotlin app does not import this package.
+- [`docs/`](docs/): original product scope, architecture, protocol, and transport evidence. The native branch goes beyond the original V1 scope and remains isolated until the team decides whether to adopt that change.
 
-## Toolchain and commands
+Read [`docs/implementation-tracks.md`](docs/implementation-tracks.md) before changing project structure. The Flutter-generated `apps/offline_relay/android/` files belong to the Flutter app; keep the Kotlin source and Gradle files in `apps/offline_relay_android/`. The apps do not share implementation code or claim cross-client wire compatibility.
 
-Generated with Flutter **3.47.6**, Dart **3.13.5**, framework revision
-`5fc346839b`. A temporary SDK was obtained from the official Flutter stable
-repository at `/tmp/offlinerelay-flutter-sdk`; it is not part of the repository
-or a persistent installation. Put a matching Flutter SDK on PATH to use the
-commands below. See [Flutter installation](https://docs.flutter.dev/install/manual).
+## Flutter toolchain
 
-Run in each Flutter project directory:
+The Flutter host was generated with Flutter **3.47.6** and Dart **3.13.5**. Open `apps/offline_relay/` in Flutter tooling. Run the following in that folder:
 
 ```sh
 flutter pub get
@@ -37,24 +23,18 @@ flutter test
 flutter build bundle --debug
 ```
 
-The bundle command compiles Flutter assets/Dart only; it does **not** validate
-native platform code or produce an installable app. With platform prerequisites
-installed, build the host using `flutter build linux --debug` or
-`flutter build apk --debug`; Apple/Windows targets require their respective
-host toolchains. Run `dart analyze packages/relay_transport` from the repo root.
+The bundle command compiles Flutter assets/Dart only; it does **not** validate native platform code or produce an installable app. Run `dart analyze packages/relay_transport` from the repository root. Platform build and device prerequisites vary.
 
-For the BLE experiment, see its [runbook](experiments/ble_poc/README.md).
-Native build verification and physical-device testing remain outstanding; see
-the [validation record](docs/testing/validation.md). No platform is currently
-claimed as a verified runnable BLE POC.
+## Native Android toolchain
 
-## Dependencies and Git
+Open `apps/offline_relay_android/` as an independent Android Studio project with JDK 17 and Android SDK Platform 35. From PowerShell in that folder, run:
 
-Both apps use Flutter, Flutter's test SDK, and `flutter_lints` 6.x. The host also
-references the local `relay_transport` package. There are no third-party BLE or
-LAN dependencies. Generated Cupertino Icons dependencies were removed because
-the placeholder/diagnostic screens do not need them. App lockfiles are retained.
+```powershell
+.\gradlew.bat :app:assembleDebug :app:testDebugUnitTest :app:lintDebug
+```
 
-Initial checkout: empty, uncommitted `main`; origin
-`git@github.com:Laxmi-Srinivas/Offline-relay.git`. The original repository was
-preserved. No commits or pushes were made.
+This builds the app, runs local JVM tests, and runs lint. It does not substitute for the physical-device checklist linked from that project's README.
+
+## Repository intent
+
+The Flutter and native Android apps are separate implementations in one repository. Keep feature work on focused branches and preserve the boundaries above. Update shared scope/protocol docs only after agreement; do not call the Dart transport interfaces a shared protocol. The BLE experiment remains disposable and independent.
