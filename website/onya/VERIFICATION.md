@@ -88,7 +88,9 @@ they were not successful test runs. No mobile code was changed.
 The user subsequently requested deployment. Publication is authorized; its actual
 outcome is recorded separately rather than inferred from successful local checks.
 
-1. User approves this preview and website publication.
+1. Publication is authorized. Website commit `44026ff` is pushed. GitHub Actions
+   passed static checks and packaging, then failed Configure Pages because Pages
+   is not enabled (run 37209493790). The user will ask the owner to enable it.
 2. Configure repository Pages/environment, push only the website branch and run
    the prepared workflow. Inspect the actual returned URL while logged out.
 3. Repeat links/assets/interaction checks on the published HTTPS site.

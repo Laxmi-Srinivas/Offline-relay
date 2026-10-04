@@ -1,8 +1,9 @@
-# GitHub Pages deployment — final approval required
+# GitHub Pages deployment — authorized, awaiting owner setup
 
-The user selected GitHub Pages with a free github.io URL. Nothing has been pushed
-or published on the website branch. Preview approval is the remaining publication
-gate. Workflow: `.github/workflows/onya-pages.yml`; source branch:
+The user selected GitHub Pages with a free github.io URL and subsequently requested
+deployment. The verified website was pushed on `feat/onya-presentation` at
+`44026ff94b3f291ecf4ca1144c17c2966765e8f9`. It is not live: Pages is not enabled.
+Workflow: `.github/workflows/onya-pages.yml`; source branch:
 `feat/onya-presentation`. No domain purchase, mobile-branch change, merge or rewrite.
 
 ## Prepared deployment
@@ -14,7 +15,21 @@ the repository root or mobile source. Build has read permissions; only deploy ha
 Pages write/OIDC permissions. Checkout does not persist credentials. No backend,
 cloud secrets, database or npm installation steps.
 
-## Publication sequence — ONLY after approval
+## Actual first deployment attempt
+
+[Run 37209493790](https://github.com/Laxmi-Srinivas/Offline-relay/actions/runs/37209493790)
+passed checkout, static checks and packaging on GitHub's runner. Configure Pages
+failed with HTTP 404: the repository has no Pages site. Upload and deploy were
+skipped. Anonymous requests to the expected project URL returned HTTP 404.
+The authenticated account has push access but not admin/maintain access. No
+repository settings were changed. The user will ask the owner to enable Pages.
+
+Owner action: Settings → Pages → Build and deployment → Source → GitHub Actions.
+If needed, Settings → Environments → github-pages must permit
+`feat/onya-presentation`. Rerun the failed workflow after setup; do not edit main.
+The local preview and ZIP remain available while deployment is blocked.
+
+## Publication sequence
 
 1. Confirm the approved website commit and inspect the finished preview.
 2. With repository-admin access, set Settings → Pages → Source to GitHub Actions.
@@ -32,7 +47,8 @@ cloud secrets, database or npm installation steps.
 
 [GitHub's custom Pages workflow guide](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages)
 describes the official configure/upload/deploy actions used here. GitHub workflow
-execution and repository/environment settings remain unverified. The first trigger
+execution has been checked through packaging; successful deployment and final
+environment settings remain unverified. The first trigger
 uses push: manual workflow dispatch generally needs its definition on the default
 branch, and this work must not modify main to enable that.
 
